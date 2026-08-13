@@ -44,6 +44,7 @@ import {
   demoVaultItem,
 } from "./lib/spatialDemo";
 import { loadPreferences, savePreferences, type Preferences } from "./lib/preferences";
+import { clearPasswordInputs } from "./lib/secretInputs";
 import { deriveCoreState } from "./state/machines";
 import {
   ArtifactButton,
@@ -180,6 +181,19 @@ export default function SpatialApp() {
   const newPassphraseRef = useRef<HTMLInputElement>(null);
   const newPassphraseConfirmRef = useRef<HTMLInputElement>(null);
 
+  const clearCreatePassphrases = () => clearPasswordInputs(passphraseRef, confirmRef);
+  const clearChangePassphrases = () => clearPasswordInputs(
+    oldPassphraseRef,
+    newPassphraseRef,
+    newPassphraseConfirmRef,
+  );
+  const clearSigningPassphrase = () => clearPasswordInputs(signPassphraseRef);
+  const clearPersonalPassphrases = () => {
+    clearCreatePassphrases();
+    clearChangePassphrases();
+    clearSigningPassphrase();
+  };
+
   const updatePreferences = (patch: Partial<Preferences>) =>
     setPreferences((current) => ({ ...current, ...patch }));
 
@@ -239,6 +253,7 @@ export default function SpatialApp() {
 
   const go = (next: SceneId) => {
     if (preferences.interactionSound && !preferences.muted) playInteraction(preferences.volume);
+    clearPersonalPassphrases();
     setWorkshopStation(null);
     setArchiveStation(null);
     setCommunicationStation(null);
@@ -270,25 +285,28 @@ export default function SpatialApp() {
       setError(lang === "hr" ? "Lozinke se ne podudaraju." : "Passphrases do not match.");
       return;
     }
+    clearCreatePassphrases();
     void run(async () => {
-      if (mode === "demo") {
-        const item = { ...demoVaultItem, displayName: displayName || "New Personal Vault", walletName: walletName || "new_personal" };
-        const nextSnapshot = { ...demoSnapshot, vault: { ...demoSnapshot.vault, displayName: item.displayName, walletName: item.walletName } };
-        setVaults([item]);
-        setSelectedWallet(item.walletName);
-        setSnapshot(nextSnapshot);
-      } else {
-        const operation = await coreApi.createPersonalVault(walletName, displayName, passphrase);
-        appendRpc(operation.rpc);
-        setSelectedWallet(operation.data.walletName);
-        await refreshVaults();
-        const detail = await coreApi.getPersonalVault(operation.data.walletName);
-        setSnapshot(detail.data);
-        appendRpc(detail.rpc);
+      try {
+        if (mode === "demo") {
+          const item = { ...demoVaultItem, displayName: displayName || "New Personal Vault", walletName: walletName || "new_personal" };
+          const nextSnapshot = { ...demoSnapshot, vault: { ...demoSnapshot.vault, displayName: item.displayName, walletName: item.walletName } };
+          setVaults([item]);
+          setSelectedWallet(item.walletName);
+          setSnapshot(nextSnapshot);
+        } else {
+          const operation = await coreApi.createPersonalVault(walletName, displayName, passphrase);
+          appendRpc(operation.rpc);
+          setSelectedWallet(operation.data.walletName);
+          await refreshVaults();
+          const detail = await coreApi.getPersonalVault(operation.data.walletName);
+          setSnapshot(detail.data);
+          appendRpc(detail.rpc);
+        }
+        go("archive");
+      } finally {
+        clearCreatePassphrases();
       }
-      if (passphraseRef.current) passphraseRef.current.value = "";
-      if (confirmRef.current) confirmRef.current.value = "";
-      go("archive");
     });
   };
 
@@ -365,15 +383,22 @@ export default function SpatialApp() {
       setError(lang === "hr" ? "Nove lozinke se ne podudaraju." : "New passphrases do not match.");
       return;
     }
+    clearChangePassphrases();
+    setPassphraseChanged(false);
+    let succeeded = false;
     void run(async () => {
-      if (mode !== "demo") {
-        const operation = await coreApi.changePersonalPassphrase(selectedWallet, oldPassphrase, newPassphrase);
-        appendRpc(operation.rpc);
+      try {
+        if (mode !== "demo") {
+          const operation = await coreApi.changePersonalPassphrase(selectedWallet, oldPassphrase, newPassphrase);
+          appendRpc(operation.rpc);
+        }
+        succeeded = true;
+        setPassphraseChanged(true);
+      } finally {
+        clearChangePassphrases();
       }
-      if (oldPassphraseRef.current) oldPassphraseRef.current.value = "";
-      if (newPassphraseRef.current) newPassphraseRef.current.value = "";
-      if (newPassphraseConfirmRef.current) newPassphraseConfirmRef.current.value = "";
-      setPassphraseChanged(true);
+    }).finally(() => {
+      if (!succeeded) oldPassphraseRef.current?.focus();
     });
   };
 
@@ -409,14 +434,22 @@ export default function SpatialApp() {
   const signSpend = () => {
     if (!spend) return;
     const passphrase = signPassphraseRef.current?.value ?? "";
+    clearSigningPassphrase();
+    let succeeded = false;
     void run(async () => {
-      if (mode === "demo") setSpend({ ...spend, state: "threshold-reached", complete: true });
-      else {
-        const operation = await coreApi.signPersonalSpend(spend.draftId, passphrase);
-        setSpend(operation.data);
-        appendRpc(operation.rpc);
+      try {
+        if (mode === "demo") setSpend({ ...spend, state: "threshold-reached", complete: true });
+        else {
+          const operation = await coreApi.signPersonalSpend(spend.draftId, passphrase);
+          setSpend(operation.data);
+          appendRpc(operation.rpc);
+        }
+        succeeded = true;
+      } finally {
+        clearSigningPassphrase();
       }
-      if (signPassphraseRef.current) signPassphraseRef.current.value = "";
+    }).finally(() => {
+      if (!succeeded) signPassphraseRef.current?.focus();
     });
   };
 
@@ -592,7 +625,7 @@ export default function SpatialApp() {
                 <ArtifactButton kind="empty" title="Time-lock module" description="Reserved workbench for a future, separately reviewed policy" status={tr("future")} disabled />
               </div>
             </div>
-            {workshopStation === "personal" && <ContextOverlay eyebrow="ACTIVE WORKBENCH · SINGLE SIGNATURE" title={tr("createPersonal")} onClose={() => setWorkshopStation(null)}>
+            {workshopStation === "personal" && <ContextOverlay eyebrow="ACTIVE WORKBENCH · SINGLE SIGNATURE" title={tr("createPersonal")} onClose={() => { clearCreatePassphrases(); setWorkshopStation(null); }}>
                 <p>{tr("personalDesc")}</p>
                 <form className="form-grid" onSubmit={createPersonal}>
                   <Field label={tr("displayName")}><input ref={displayNameRef} required minLength={2} placeholder="Harbour Vault" autoComplete="off" /></Field>
@@ -635,7 +668,7 @@ export default function SpatialApp() {
                     ))}
                   </div>
                 </RecessedLedger>
-                <details className="technical-card"><summary>{tr("technical")}</summary><dl><dt>Core wallet</dt><dd>{snapshot.vault.walletName}</dd><dt>Public fingerprint</dt><dd>{snapshot.vault.publicFingerprint}</dd><dt>Private keys</dt><dd>{snapshot.vault.privateKeysEnabled ? "Enabled, encrypted" : "Watch-only"}</dd></dl>{snapshot.vault.privateKeysEnabled && <form className="technical-form" onSubmit={changePassphrase}><h3>Change wallet passphrase</h3><div className="technical-fields"><Field label="Current passphrase"><input ref={oldPassphraseRef} type="password" autoComplete="current-password" required /></Field><Field label="New passphrase"><input ref={newPassphraseRef} type="password" autoComplete="new-password" minLength={12} required /></Field><Field label="Confirm new passphrase"><input ref={newPassphraseConfirmRef} type="password" autoComplete="new-password" minLength={12} required /></Field></div><button className="secondary-action" type="submit" disabled={loading}>Change passphrase locally</button>{passphraseChanged && <small className="inline-success"><Check size={14} /> Passphrase changed; fields cleared.</small>}</form>}</details>
+                <details className="technical-card" onToggle={(event) => { if (!event.currentTarget.open) clearChangePassphrases(); }}><summary>{tr("technical")}</summary><dl><dt>Core wallet</dt><dd>{snapshot.vault.walletName}</dd><dt>Public fingerprint</dt><dd>{snapshot.vault.publicFingerprint}</dd><dt>Private keys</dt><dd>{snapshot.vault.privateKeysEnabled ? "Enabled, encrypted" : "Watch-only"}</dd></dl>{snapshot.vault.privateKeysEnabled && <form className="technical-form" onSubmit={changePassphrase}><h3>Change wallet passphrase</h3><div className="technical-fields"><Field label="Current passphrase"><input ref={oldPassphraseRef} type="password" autoComplete="current-password" required /></Field><Field label="New passphrase"><input ref={newPassphraseRef} type="password" autoComplete="new-password" minLength={12} required /></Field><Field label="Confirm new passphrase"><input ref={newPassphraseConfirmRef} type="password" autoComplete="new-password" minLength={12} required /></Field></div><button className="secondary-action" type="submit" disabled={loading}>Change passphrase locally</button>{passphraseChanged && <small className="inline-success"><Check size={14} /> Passphrase changed; fields cleared.</small>}</form>}</details>
               </div>
             ) : <EmptyVault tr={tr} go={go} />}
           </WorldScene>
@@ -680,13 +713,13 @@ export default function SpatialApp() {
                   <button className="secondary-action" onClick={() => void navigator.clipboard.writeText(receive.address).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1400); })}><Copy size={16} /> {copied ? tr("copied") : tr("copy")}</button>
                 </div>}
             </ContextOverlay>}
-            {communicationStation === "send" && <ContextOverlay eyebrow="OUTBOUND CHANNEL · PSBT FIRST" title={tr("send")} onClose={() => setCommunicationStation(null)} className="send-console">
+            {communicationStation === "send" && <ContextOverlay eyebrow="OUTBOUND CHANNEL · PSBT FIRST" title={tr("send")} onClose={() => { clearSigningPassphrase(); setCommunicationStation(null); }} className="send-console">
                 {!spend && !broadcast && <form className="form-grid" onSubmit={createSpend}>
                   <Field label={tr("destination")}><input ref={destinationRef} required placeholder="tb1…" autoComplete="off" /></Field>
                   <div className="split-fields"><Field label={tr("amountSats")}><input ref={amountRef} required type="number" min={1} step={1} defaultValue={25000} /></Field><Field label={tr("feeRate")}><input ref={feeRef} required type="number" min={0.1} step={0.1} defaultValue={2} /></Field></div>
                   <button className="primary-action" disabled={!selectedWallet || loading} type="submit"><Send size={17} /> {tr("createProposal")}</button>
                 </form>}
-                {spend && !broadcast && <SpendReview spend={spend} tr={tr} passphraseRef={signPassphraseRef} loading={loading} confirmed={broadcastConfirmed} setConfirmed={setBroadcastConfirmed} onSign={signSpend} onFinalize={finalizeSpend} onPreflight={retryPreflight} onBroadcast={broadcastSpend} onCancel={() => { setSpend(null); setBroadcastConfirmed(false); }} core={core} />}
+                {spend && !broadcast && <SpendReview spend={spend} tr={tr} passphraseRef={signPassphraseRef} loading={loading} confirmed={broadcastConfirmed} setConfirmed={setBroadcastConfirmed} onSign={signSpend} onFinalize={finalizeSpend} onPreflight={retryPreflight} onBroadcast={broadcastSpend} onCancel={() => { clearSigningPassphrase(); setSpend(null); setBroadcastConfirmed(false); }} core={core} />}
                 {broadcast && <div className="broadcast-result"><ShieldCheck size={34} /><h3>Transaction broadcast</h3><code>{broadcast.txid}</code><p>{formatSats(broadcast.sentSats)} + {formatSats(broadcast.feeSats)} fee</p><button className="secondary-action" onClick={() => { setSpend(null); setBroadcast(null); setBroadcastConfirmed(false); }}>New proposal</button></div>}
             </ContextOverlay>}
           </WorldScene>

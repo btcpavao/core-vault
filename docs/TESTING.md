@@ -18,6 +18,12 @@ File-capability unit tests cover valid one-time use, replay rejection, operation
 
 Personal Vault mempool-preflight tests require exactly one structurally valid `testmempoolaccept` result with explicit `allowed: true`. Missing, null, malformed, rejected, empty, or ambiguous responses remain non-broadcastable. The Rust broadcast boundary also tests no-preflight, rejected, indeterminate, exact-finalized-transaction identity, and accepted progression states.
 
+Personal Vault passphrase-lifecycle tests mount the real React shell in jsdom and exercise its actual DOM inputs with a mocked typed Tauri client. They prove that create, passphrase-change, and signing secrets are cleared before privileged promises settle and remain empty after success or failure; failed signing remains retryable, and closing the create interaction removes its secrets. Run this focused suite with:
+
+```bash
+npx vitest run tests/passphrase-lifecycle.test.tsx
+```
+
 ## Isolated Regtest golden recovery test
 
 The real Bitcoin Core integration test is explicit and is not started by `npm test` or `npm run verify`:
