@@ -6,6 +6,12 @@ Eksperimentalna Tauri desktop aplikacija koja organizira lokalne Bitcoin Core wa
 
 Core Vault is an independent interface powered by Bitcoin Core. It is not developed or endorsed by the Bitcoin Core project.
 
+## Project specification
+
+Autoritativne specifikacije projekta nalaze se u direktoriju [docs/](docs/README.md). Codex i
+drugi suradnici moraju ih pročitati prije svakog značajnog produktnog ili sučeljnog rada te
+izričito prijaviti svaki nesklad između specifikacije i postojeće implementacije.
+
 ## Što radi
 
 - otkriva lokalni Bitcoin Core preko standardnog cookieja i loopback RPC-a
