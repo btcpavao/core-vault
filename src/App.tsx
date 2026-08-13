@@ -27,7 +27,16 @@ import {
   TrustFacts,
   VaultDiagram,
 } from "./components/ui";
-import { demoBroadcast, demoCoreStatus, demoReceive, demoSigner, demoSpend, demoVault } from "./lib/demo";
+import {
+  demoBroadcast,
+  demoCoreStatus,
+  demoFinalizeSpend,
+  demoPreflightSpend,
+  demoReceive,
+  demoSigner,
+  demoSpend,
+  demoVault,
+} from "./lib/demo";
 import {
   choosePublicBackupExportDestination,
   chooseSignerBackupDestination,
@@ -339,15 +348,61 @@ function App() {
     }
   };
 
-  const handleBroadcast = async () => {
+  const handleFinalizeSpend = async () => {
     if (!draft) return;
-    setBusy("broadcast");
+    setBusy("finalize-spend");
     setError(null);
     try {
       if (demoMode) await waitForDemo();
-      const operation: Operation<BroadcastResult> = demoMode
-        ? demoBroadcast()
-        : await coreApi.broadcast(draft.draftId);
+      const operation = demoMode
+        ? demoFinalizeSpend(draft)
+        : await coreApi.finalizeMultisigSpend(draft.draftId);
+      setDraft(append(operation));
+    } catch (reason) {
+      setError(formatError(reason));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handlePreflightSpend = async () => {
+    if (!draft) return;
+    setBusy("preflight-spend");
+    setError(null);
+    try {
+      if (demoMode) await waitForDemo();
+      const operation = demoMode
+        ? demoPreflightSpend(draft)
+        : await coreApi.preflightMultisigSpend(draft.draftId);
+      setDraft(append(operation));
+    } catch (reason) {
+      setError(formatError(reason));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleBroadcast = async () => {
+    if (!draft) return;
+    setBusy("authorize-broadcast");
+    setError(null);
+    try {
+      if (demoMode) {
+        await waitForDemo();
+      } else {
+        const authorization = await coreApi.requestMultisigBroadcastAuthorization(draft.draftId);
+        if (!authorization) return;
+        setBusy("broadcast");
+        const operation = await coreApi.broadcastMultisigSpend(
+          draft.draftId,
+          authorization.authorizationId,
+        );
+        setBroadcast(append(operation));
+        setSpendStage("sent");
+        markComplete("spend");
+        return;
+      }
+      const operation: Operation<BroadcastResult> = demoBroadcast();
       setBroadcast(append(operation));
       setSpendStage("sent");
       markComplete("spend");
@@ -492,6 +547,8 @@ function App() {
               onSelectSigner={setSelectedSigner}
               onSign={handleSign}
               onRetrySignerLock={handleRetrySignerLock}
+              onFinalize={handleFinalizeSpend}
+              onPreflight={handlePreflightSpend}
               onBroadcast={handleBroadcast}
             />
           )}
@@ -753,6 +810,8 @@ function SpendStep({
   onSelectSigner,
   onSign,
   onRetrySignerLock,
+  onFinalize,
+  onPreflight,
   onBroadcast,
 }: {
   stage: "compose" | "review" | "sign" | "sent";
@@ -774,6 +833,8 @@ function SpendStep({
   onSelectSigner: (value: string | null) => void;
   onSign: (walletName: string, passphrase: string) => Promise<void>;
   onRetrySignerLock: () => Promise<void>;
+  onFinalize: () => Promise<void>;
+  onPreflight: () => Promise<void>;
   onBroadcast: () => void;
 }) {
   if (stage === "compose") {
@@ -803,16 +864,24 @@ function SpendStep({
         eyebrow="Add signature"
         title={draft.relockRequired
           ? "Signer wallet lock needs attention"
-          : draft.complete
-            ? "Two approvals collected"
+          : draft.state === "ready-to-broadcast"
+            ? "Transaction ready to broadcast"
+            : draft.finalized
+              ? "Check the finalized transaction"
+              : draft.complete
+                ? "Two approvals collected"
             : draft.signedBy.length === 1
               ? "Transaction needs one more signature"
               : "Choose the first signing wallet"}
       >
         <p>{draft.relockRequired
           ? "Core Vault has paused signing and transaction progression until Bitcoin Core confirms the signer wallet is locked again."
-          : draft.complete
-            ? "Review the transaction once more before local broadcast."
+          : draft.state === "ready-to-broadcast"
+            ? "Transaction is fully signed, finalized, and ready to broadcast."
+            : draft.finalized
+              ? "Run Bitcoin Core's local mempool policy check before broadcast can be authorized."
+              : draft.complete
+                ? "Finalize the exact signed PSBT locally. This does not broadcast or run preflight."
             : "Each approval is added by Bitcoin Core. Core Vault never receives a private key."}</p>
       </StepHeader>
       <TransactionReview draft={draft} remaining={remaining} compact />
@@ -828,8 +897,13 @@ function SpendStep({
           <button className="button button-primary" onClick={() => void onRetrySignerLock()} disabled={busy !== null}>{busy === "retry-signer-lock" ? "Retrying lock…" : "Retry lock"}</button>
         </SecurityNotice>
       )}
-      {draft.complete && !draft.relockRequired && <SecurityNotice level="warning" title="Broadcast is the final action"><p>Bitcoin Core will send this transaction to the Signet network. Amount, destination and fee can no longer be changed without creating a new transaction.</p></SecurityNotice>}
-      {draft.complete && !draft.relockRequired && <div className="step-actions"><button className="button button-primary" onClick={onBroadcast} disabled={busy !== null}>{busy === "broadcast" ? "Finalizing and broadcasting…" : "Broadcast on Signet"}</button></div>}
+      {draft.mempoolPreflight.state === "accepted" && <SecurityNotice level="success" title="Transaction check accepted"><p>Bitcoin Core would accept this transaction into its mempool.</p></SecurityNotice>}
+      {draft.mempoolPreflight.state === "rejected" && <SecurityNotice level="warning" title="Transaction check rejected"><p>Bitcoin Core would not accept this transaction into its mempool.{draft.mempoolPreflight.reason ? ` ${draft.mempoolPreflight.reason}` : ""}</p></SecurityNotice>}
+      {draft.mempoolPreflight.state === "indeterminate" && <SecurityNotice level="warning" title="Transaction check indeterminate"><p>Core Vault could not verify that Bitcoin Core would accept this transaction. Broadcast is disabled. {draft.mempoolPreflight.reason}</p></SecurityNotice>}
+      {draft.complete && !draft.relockRequired && !draft.finalized && <div className="step-actions"><button className="button button-primary" onClick={() => void onFinalize()} disabled={busy !== null}>{busy === "finalize-spend" ? "Finalizing locally…" : "Finalize transaction"}</button></div>}
+      {draft.finalized && draft.state !== "ready-to-broadcast" && !draft.relockRequired && <div className="step-actions"><button className="button button-primary" onClick={() => void onPreflight()} disabled={busy !== null}>{busy === "preflight-spend" ? "Checking with Bitcoin Core…" : "Check transaction"}</button></div>}
+      {draft.state === "ready-to-broadcast" && !draft.relockRequired && <SecurityNotice level="warning" title="Broadcast is the final action"><p>Transaction is fully signed, finalized, and ready to broadcast. A privileged native confirmation is required before Bitcoin Core can send it to Signet.</p></SecurityNotice>}
+      {draft.state === "ready-to-broadcast" && !draft.relockRequired && <div className="step-actions"><button className="button button-primary" onClick={onBroadcast} disabled={busy !== null}>{busy === "authorize-broadcast" ? "Waiting for native confirmation…" : busy === "broadcast" ? "Broadcasting through Bitcoin Core…" : "Broadcast transaction"}</button></div>}
     </section>
   );
 }

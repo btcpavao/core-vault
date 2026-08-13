@@ -1,11 +1,15 @@
+#[cfg(test)]
+use crate::broadcast_authorization::BroadcastConfirmer;
 use crate::{
+    broadcast_authorization::{BroadcastAuthorizationGrant, BroadcastPurpose, BroadcastSummary},
     file_capabilities::{consume_file_capability, FileOperation},
+    personal::{ensure_broadcast_preflight, parse_mempool_preflight},
     rpc::{ensure_signet, ensure_test_chain, sanitize_rpc_text, RpcClient},
     security::{contains_private_material, validate_public_backup, validate_wallet_name},
     types::{
-        AppState, BroadcastResult, Operation, PublicVaultBackup, ReceiveSnapshot, RpcTrace,
-        SignerPublic, SignerRelockRequired, SigningWallet, SpendDraftView, SpendState,
-        VaultSummary,
+        finalized_transaction_identity, AppState, BroadcastResult, MempoolPreflight, Operation,
+        PublicVaultBackup, ReceiveSnapshot, RpcTrace, SignerPublic, SignerRelockRequired,
+        SigningWallet, SpendDraftView, SpendState, VaultSummary,
     },
 };
 use serde_json::{json, Map, Value};
@@ -463,6 +467,10 @@ pub async fn create_spend_draft(
         signed_by: Vec::new(),
         complete: false,
         relock_required: None,
+        raw_hex: None,
+        mempool_preflight: MempoolPreflight::NotRun,
+        preflight_version: 0,
+        broadcast_in_progress: false,
     };
     let view = draft.view(draft_id.clone());
     state
@@ -492,6 +500,14 @@ pub async fn sign_spend_draft(
         .cloned()
         .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
     ensure_legacy_workflow_can_progress(&snapshot)?;
+    if snapshot.broadcast_in_progress {
+        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+    }
+    if snapshot.raw_hex.is_some() {
+        return Err(
+            "Transakcija je već finalizirana. Novi potpis zahtijeva novi transaction draft.".into(),
+        );
+    }
     if snapshot.signed_by.iter().any(|name| name == &wallet_name) {
         return Err(
             "Ovaj signing wallet već je odobrio transakciju. Odaberite drugi ključ.".into(),
@@ -666,11 +682,11 @@ pub async fn retry_signer_lock(
     })
 }
 
-pub async fn finalize_and_broadcast(
+pub async fn finalize_multisig_spend(
     client: RpcClient,
     state: &AppState,
     draft_id: String,
-) -> Result<Operation<BroadcastResult>, String> {
+) -> Result<Operation<SpendDraftView>, String> {
     let snapshot = state
         .drafts
         .lock()
@@ -679,8 +695,14 @@ pub async fn finalize_and_broadcast(
         .cloned()
         .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
     ensure_legacy_workflow_can_progress(&snapshot)?;
+    if snapshot.broadcast_in_progress {
+        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+    }
     if snapshot.signed_by.len() < 2 || !snapshot.complete {
-        return Err("Transakcija treba još potpisa. Nije finalizirana niti poslana.".into());
+        return Err("Transakcija treba još potpisa i ne može se finalizirati.".into());
+    }
+    if snapshot.raw_hex.is_some() {
+        return Err("Transakcija je već finalizirana.".into());
     }
     let mut traces = Vec::new();
     ensure_signet(&client, &mut traces).await?;
@@ -690,7 +712,7 @@ pub async fn finalize_and_broadcast(
             "finalizepsbt",
             json!({ "psbt": snapshot.psbt, "extract": true }),
             None,
-            "Bitcoin Core provjerava potpise i finalizira transakciju.",
+            "Bitcoin Core lokalno provjerava potpise i finalizira transakciju bez preflighta ili broadcasta.",
             Some(json!({ "psbt": "[REDACTED]", "extract": true })),
             true,
             &mut traces,
@@ -698,65 +720,362 @@ pub async fn finalize_and_broadcast(
         .await?;
     if finalized.get("complete").and_then(Value::as_bool) != Some(true) {
         return Err(
-            "Bitcoin Core nije potvrdio dovoljan broj potpisa. Transakcija nije poslana.".into(),
+            "Bitcoin Core nije potvrdio dovoljan broj potpisa. Finalizirano stanje nije spremljeno."
+                .into(),
         );
     }
     let raw_hex = finalized
         .get("hex")
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Bitcoin Core nije vratio finalizirani transaction hex.".to_string())?;
-    let txid = client
-        .call(
-            "sendrawtransaction",
-            json!({ "hexstring": raw_hex }),
-            None,
-            "Lokalni Bitcoin Core broadcasta finaliziranu transakciju na Signet.",
-            Some(json!({ "hexstring": "[REDACTED]" })),
-            false,
-            &mut traces,
-        )
-        .await?
-        .as_str()
-        .filter(|value| value.len() == 64)
-        .ok_or_else(|| "Bitcoin Core nije vratio valjani txid.".to_string())?
+        .ok_or_else(|| "Bitcoin Core nije vratio finalizirani transaction hex.".to_string())?
         .to_string();
-    let fee_sats = btc_to_sats(snapshot.fee_btc);
-    let estimated_remaining = snapshot
-        .starting_balance_sats
-        .saturating_sub(snapshot.amount_sats)
-        .saturating_sub(fee_sats);
-    let refreshed_balances = client
-        .call(
-            "getbalances",
-            json!({}),
-            Some(&snapshot.coordinator_name),
-            "Nakon broadcasta osvježava lokalni vault balance i provjerava change.",
-            None,
-            false,
-            &mut traces,
-        )
-        .await;
-    let (remaining_sats, balance_refreshed) = match refreshed_balances {
-        Ok(value) => (btc_to_sats(wallet_balance_btc(&value)), true),
-        Err(_) => (estimated_remaining, false),
-    };
+    let mut drafts = state
+        .drafts
+        .lock()
+        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
+    let draft = drafts
+        .get_mut(&draft_id)
+        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+    ensure_legacy_workflow_can_progress(draft)?;
+    if draft.psbt != snapshot.psbt || draft.raw_hex.is_some() || draft.broadcast_in_progress {
+        return Err(
+            "Transaction draft promijenjen je tijekom finalizacije. Ponovno učitajte stanje."
+                .into(),
+        );
+    }
+    draft.raw_hex = Some(raw_hex);
+    draft.mempool_preflight = MempoolPreflight::NotRun;
+    draft.preflight_version = draft.preflight_version.saturating_add(1);
+    let view = draft.view(draft_id.clone());
     state
+        .broadcast_authorizations
+        .lock()
+        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .revoke_draft(&draft_id);
+    Ok(Operation {
+        data: view,
+        rpc: traces,
+    })
+}
+
+pub async fn preflight_multisig_spend(
+    client: RpcClient,
+    state: &AppState,
+    draft_id: String,
+) -> Result<Operation<SpendDraftView>, String> {
+    let snapshot = state
         .drafts
         .lock()
         .map_err(|_| "Interni transaction state nije dostupan.".to_string())?
-        .remove(&draft_id);
+        .get(&draft_id)
+        .cloned()
+        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+    ensure_legacy_workflow_can_progress(&snapshot)?;
+    if snapshot.broadcast_in_progress {
+        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+    }
+    let raw_hex = snapshot
+        .raw_hex
+        .clone()
+        .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
+    let transaction_identity = finalized_transaction_identity(&raw_hex);
+    let mut traces = Vec::new();
+    let preflight = match ensure_signet(&client, &mut traces).await {
+        Ok(()) => match client
+            .call(
+                "testmempoolaccept",
+                json!({ "rawtxs": [raw_hex] }),
+                None,
+                "Bitcoin Core lokalno provjerava točno finaliziranu transakciju bez broadcasta.",
+                Some(json!({ "rawtxs": ["[REDACTED]"] })),
+                true,
+                &mut traces,
+            )
+            .await
+        {
+            Ok(result) => parse_mempool_preflight(result, transaction_identity.clone()),
+            Err(_) => MempoolPreflight::Indeterminate {
+                transaction_identity: transaction_identity.clone(),
+                reason: "Core Vault nije mogao dobiti pouzdan testmempoolaccept rezultat. Broadcast je onemogućen."
+                    .into(),
+            },
+        },
+        Err(_) => MempoolPreflight::Indeterminate {
+            transaction_identity: transaction_identity.clone(),
+            reason: "Core Vault nije mogao potvrditi podržanu mrežu za mempool provjeru. Broadcast je onemogućen."
+                .into(),
+        },
+    };
+
+    let mut drafts = state
+        .drafts
+        .lock()
+        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
+    let draft = drafts
+        .get_mut(&draft_id)
+        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+    ensure_legacy_workflow_can_progress(draft)?;
+    if draft.raw_hex.as_deref() != Some(raw_hex.as_str()) || draft.broadcast_in_progress {
+        return Err(
+            "Finalizirana transakcija promijenjena je tijekom mempool provjere. Pokrenite provjeru ponovno."
+                .into(),
+        );
+    }
+    draft.mempool_preflight = preflight;
+    draft.preflight_version = draft.preflight_version.saturating_add(1);
+    let view = draft.view(draft_id.clone());
+    state
+        .broadcast_authorizations
+        .lock()
+        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .revoke_draft(&draft_id);
     Ok(Operation {
-        data: BroadcastResult {
+        data: view,
+        rpc: traces,
+    })
+}
+
+#[derive(Clone, Debug)]
+pub struct PreparedMultisigBroadcastAuthorization {
+    draft_id: String,
+    transaction_identity: String,
+    preflight_version: u64,
+    pub summary: BroadcastSummary,
+}
+
+pub fn prepare_multisig_broadcast_authorization(
+    state: &AppState,
+    draft_id: &str,
+) -> Result<PreparedMultisigBroadcastAuthorization, String> {
+    let drafts = state
+        .drafts
+        .lock()
+        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
+    let draft = drafts
+        .get(draft_id)
+        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+    let (_, transaction_identity) = ensure_legacy_ready_for_broadcast(draft)?;
+    Ok(PreparedMultisigBroadcastAuthorization {
+        draft_id: draft_id.into(),
+        transaction_identity,
+        preflight_version: draft.preflight_version,
+        summary: BroadcastSummary {
+            vault_name: draft.coordinator_name.clone(),
+            destination: draft.destination.clone(),
+            amount_sats: draft.amount_sats,
+            fee_sats: btc_to_sats(draft.fee_btc),
+            network: "Signet".into(),
+        },
+    })
+}
+
+pub fn complete_multisig_broadcast_authorization(
+    state: &AppState,
+    prepared: PreparedMultisigBroadcastAuthorization,
+    approved: bool,
+) -> Result<Option<BroadcastAuthorizationGrant>, String> {
+    if !approved {
+        return Ok(None);
+    }
+    let drafts = state
+        .drafts
+        .lock()
+        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
+    let draft = drafts
+        .get(&prepared.draft_id)
+        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+    let (_, current_identity) = ensure_legacy_ready_for_broadcast(draft)?;
+    if current_identity != prepared.transaction_identity
+        || draft.preflight_version != prepared.preflight_version
+    {
+        return Err(
+            "Transakcija ili njezina mempool provjera promijenila se tijekom potvrde. Ponovno pregledajte i potvrdite broadcast."
+                .into(),
+        );
+    }
+    let grant = state
+        .broadcast_authorizations
+        .lock()
+        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .issue(
+            BroadcastPurpose::LegacyMultisigTransaction,
+            prepared.draft_id,
+            prepared.transaction_identity,
+            prepared.preflight_version,
+        )?;
+    Ok(Some(grant))
+}
+
+#[cfg(test)]
+fn request_multisig_broadcast_authorization_with<C: BroadcastConfirmer>(
+    state: &AppState,
+    draft_id: &str,
+    confirmer: &C,
+) -> Result<Option<BroadcastAuthorizationGrant>, String> {
+    let prepared = prepare_multisig_broadcast_authorization(state, draft_id)?;
+    let approved = confirmer.confirm(&prepared.summary)?;
+    complete_multisig_broadcast_authorization(state, prepared, approved)
+}
+
+pub async fn broadcast_multisig_spend(
+    client: RpcClient,
+    state: &AppState,
+    draft_id: String,
+    authorization_id: String,
+) -> Result<Operation<BroadcastResult>, String> {
+    let snapshot = state
+        .drafts
+        .lock()
+        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?
+        .get(&draft_id)
+        .cloned()
+        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+    let (_, transaction_identity) = ensure_legacy_ready_for_broadcast(&snapshot)?;
+    state
+        .broadcast_authorizations
+        .lock()
+        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .consume(
+            &authorization_id,
+            BroadcastPurpose::LegacyMultisigTransaction,
+            &draft_id,
+            &transaction_identity,
+            snapshot.preflight_version,
+        )?;
+
+    {
+        let mut drafts = state
+            .drafts
+            .lock()
+            .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
+        let draft = drafts
+            .get_mut(&draft_id)
+            .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+        let (_, current_identity) = ensure_legacy_ready_for_broadcast(draft)?;
+        if current_identity != transaction_identity
+            || draft.preflight_version != snapshot.preflight_version
+        {
+            return Err(
+                "Transakcija ili preflight promijenili su se prije broadcasta. Autorizacija je potrošena."
+                    .into(),
+            );
+        }
+        draft.broadcast_in_progress = true;
+    }
+
+    let mut traces = Vec::new();
+    let attempt = async {
+        ensure_signet(&client, &mut traces).await?;
+        let network = client
+            .call(
+                "getnetworkinfo",
+                json!({}),
+                None,
+                "Neposredno prije broadcasta provjerava da je Bitcoin Core P2P mreža aktivna.",
+                None,
+                false,
+                &mut traces,
+            )
+            .await?;
+        if network.get("networkactive").and_then(Value::as_bool) != Some(true) {
+            return Err(
+                "Broadcast je onemogućen dok je Bitcoin Core network activity disabled. Autorizacija je potrošena."
+                    .into(),
+            );
+        }
+        let raw_hex = snapshot
+            .raw_hex
+            .as_deref()
+            .ok_or_else(|| "Transakcija više nije finalizirana.".to_string())?;
+        let txid = client
+            .call(
+                "sendrawtransaction",
+                json!({ "hexstring": raw_hex }),
+                None,
+                "Bitcoin Core broadcasta autoriziranu finaliziranu transakciju na Signet.",
+                Some(json!({ "hexstring": "[REDACTED]" })),
+                false,
+                &mut traces,
+            )
+            .await?
+            .as_str()
+            .filter(|value| value.len() == 64 && value.chars().all(|character| character.is_ascii_hexdigit()))
+            .ok_or_else(|| "Bitcoin Core nije vratio valjani txid.".to_string())?
+            .to_string();
+        let fee_sats = btc_to_sats(snapshot.fee_btc);
+        let estimated_remaining = snapshot
+            .starting_balance_sats
+            .saturating_sub(snapshot.amount_sats)
+            .saturating_sub(fee_sats);
+        let refreshed_balances = client
+            .call(
+                "getbalances",
+                json!({}),
+                Some(&snapshot.coordinator_name),
+                "Nakon uspješnog broadcasta osvježava lokalni vault balance i provjerava change.",
+                None,
+                false,
+                &mut traces,
+            )
+            .await;
+        let (remaining_sats, balance_refreshed) = match refreshed_balances {
+            Ok(value) => (btc_to_sats(wallet_balance_btc(&value)), true),
+            Err(_) => (estimated_remaining, false),
+        };
+        Ok::<_, String>(BroadcastResult {
             txid,
             starting_balance_sats: snapshot.starting_balance_sats,
             sent_sats: snapshot.amount_sats,
             fee_sats,
             remaining_sats,
             balance_refreshed,
-        },
-        rpc: traces,
-    })
+        })
+    }
+    .await;
+
+    match attempt {
+        Ok(result) => {
+            state
+                .drafts
+                .lock()
+                .map_err(|_| "Interni transaction state nije dostupan.".to_string())?
+                .remove(&draft_id);
+            state
+                .broadcast_authorizations
+                .lock()
+                .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+                .revoke_draft(&draft_id);
+            Ok(Operation {
+                data: result,
+                rpc: traces,
+            })
+        }
+        Err(error) => {
+            if let Ok(mut drafts) = state.drafts.lock() {
+                if let Some(draft) = drafts.get_mut(&draft_id) {
+                    draft.broadcast_in_progress = false;
+                }
+            }
+            Err(error)
+        }
+    }
+}
+
+fn ensure_legacy_ready_for_broadcast(draft: &SpendState) -> Result<(&str, String), String> {
+    ensure_legacy_workflow_can_progress(draft)?;
+    if draft.broadcast_in_progress {
+        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+    }
+    if draft.signed_by.len() < 2 || !draft.complete {
+        return Err("Transakcija nema potvrđen prag potpisa.".into());
+    }
+    let raw_hex = draft
+        .raw_hex
+        .as_deref()
+        .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
+    ensure_broadcast_preflight(&draft.mempool_preflight, raw_hex)?;
+    Ok((raw_hex, finalized_transaction_identity(raw_hex)))
 }
 
 #[derive(Debug)]
@@ -832,6 +1151,10 @@ fn apply_legacy_signature(draft: &mut SpendState, wallet_name: &str, signature: 
     draft.psbt = signature.psbt;
     draft.signed_by.push(wallet_name.to_string());
     draft.complete = signature.complete;
+    draft.raw_hex = None;
+    draft.mempool_preflight = MempoolPreflight::NotRun;
+    draft.preflight_version = draft.preflight_version.saturating_add(1);
+    draft.broadcast_in_progress = false;
 }
 
 fn relock_required_state(
@@ -1273,9 +1596,38 @@ mod tests {
         method: &'static str,
         response: Result<Value, &'static str>,
         atomic_signer_wallet: Option<&'static str>,
+        expected_raw_hex: Option<&'static str>,
+    }
+
+    struct MockBroadcastConfirmer {
+        approved: bool,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl MockBroadcastConfirmer {
+        fn new(approved: bool) -> Self {
+            Self {
+                approved,
+                calls: std::sync::atomic::AtomicUsize::new(0),
+            }
+        }
+
+        fn calls(&self) -> usize {
+            self.calls.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
+    impl BroadcastConfirmer for MockBroadcastConfirmer {
+        fn confirm(&self, _summary: &BroadcastSummary) -> Result<bool, String> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(self.approved)
+        }
     }
 
     const TEST_ONLY_SIGNER_PASSPHRASE: &str = "test-only-legacy-signer-passphrase-42";
+    const TEST_FINALIZED_RAW_HEX: &str = "02000000000100deadbeef";
+    const TEST_BROADCAST_TXID: &str =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     fn tpub(seed: char) -> String {
         format!("tpub{}", seed.to_string().repeat(107))
@@ -1757,10 +2109,530 @@ mod tests {
             assert!(next_signer_error.starts_with("STOP:"));
 
             let finalize_error =
-                finalize_and_broadcast(unreachable_rpc_client(), &state, "legacy-draft".into())
+                finalize_multisig_spend(unreachable_rpc_client(), &state, "legacy-draft".into())
                     .await
-                    .expect_err("finalize and broadcast must be blocked before RPC");
+                    .expect_err("finalization must be blocked before RPC");
             assert!(finalize_error.starts_with("STOP:"));
+
+            let preflight_error =
+                preflight_multisig_spend(unreachable_rpc_client(), &state, "legacy-draft".into())
+                    .await
+                    .expect_err("preflight must be blocked before RPC");
+            assert!(preflight_error.starts_with("STOP:"));
+
+            let confirmer = MockBroadcastConfirmer::new(true);
+            let authorization_error =
+                request_multisig_broadcast_authorization_with(&state, "legacy-draft", &confirmer)
+                    .expect_err("native authorization must be blocked before opening a dialog");
+            assert!(authorization_error.starts_with("STOP:"));
+            assert_eq!(confirmer.calls(), 0);
+
+            let broadcast_error = broadcast_multisig_spend(
+                unreachable_rpc_client(),
+                &state,
+                "legacy-draft".into(),
+                "not-an-authorization".into(),
+            )
+            .await
+            .expect_err("broadcast must be blocked before RPC");
+            assert!(broadcast_error.starts_with("STOP:"));
+        });
+    }
+
+    #[test]
+    fn multisig_finalization_stores_exact_raw_transaction_without_preflight_or_send() {
+        test_runtime().block_on(async {
+            let state = test_app_state(threshold_spend_state());
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(vec![
+                signet_step(),
+                coordinator_step(),
+                rpc_ok(
+                    "finalizepsbt",
+                    json!({ "complete": true, "hex": TEST_FINALIZED_RAW_HEX }),
+                ),
+            ]);
+
+            let operation = finalize_multisig_spend(client, &state, "legacy-draft".into())
+                .await
+                .expect("fully signed PSBT should finalize locally");
+
+            finish_mock(server, cookie_path);
+            assert!(operation.data.finalized);
+            assert_eq!(operation.data.state, "finalized");
+            assert!(matches!(
+                operation.data.mempool_preflight,
+                crate::types::MempoolPreflightView::NotRun
+            ));
+            let draft = state.drafts.lock().expect("draft state should lock");
+            assert_eq!(
+                draft["legacy-draft"].raw_hex.as_deref(),
+                Some(TEST_FINALIZED_RAW_HEX)
+            );
+            drop(draft);
+            assert_eq!(
+                method_log
+                    .lock()
+                    .expect("method log should lock")
+                    .as_slice(),
+                ["getblockchaininfo", "getwalletinfo", "finalizepsbt"]
+            );
+        });
+    }
+
+    #[test]
+    fn incomplete_multisig_finalization_preserves_signed_draft_without_raw_transaction() {
+        test_runtime().block_on(async {
+            let state = test_app_state(threshold_spend_state());
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(vec![
+                signet_step(),
+                coordinator_step(),
+                rpc_ok("finalizepsbt", json!({ "complete": false })),
+            ]);
+
+            let error = finalize_multisig_spend(client, &state, "legacy-draft".into())
+                .await
+                .expect_err("incomplete finalization must fail closed");
+
+            finish_mock(server, cookie_path);
+            assert!(error.contains("nije potvrdio dovoljan broj potpisa"));
+            assert!(
+                state.drafts.lock().expect("draft state should lock")["legacy-draft"]
+                    .raw_hex
+                    .is_none()
+            );
+            assert_eq!(
+                method_log
+                    .lock()
+                    .expect("method log should lock")
+                    .as_slice(),
+                ["getblockchaininfo", "getwalletinfo", "finalizepsbt"]
+            );
+        });
+    }
+
+    #[test]
+    fn accepted_multisig_preflight_is_bound_to_the_exact_finalized_transaction() {
+        test_runtime().block_on(async {
+            let state = test_app_state(finalized_spend_state(TEST_FINALIZED_RAW_HEX));
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(vec![
+                signet_step(),
+                preflight_ok(
+                    TEST_FINALIZED_RAW_HEX,
+                    json!([{
+                        "txid": "b".repeat(64),
+                        "wtxid": "c".repeat(64),
+                        "allowed": true
+                    }]),
+                ),
+            ]);
+
+            let operation = preflight_multisig_spend(client, &state, "legacy-draft".into())
+                .await
+                .expect("strict accepted result should make the exact transaction ready");
+
+            finish_mock(server, cookie_path);
+            assert_eq!(operation.data.state, "ready-to-broadcast");
+            assert!(matches!(
+                operation.data.mempool_preflight,
+                crate::types::MempoolPreflightView::Accepted
+            ));
+            assert_eq!(
+                method_log
+                    .lock()
+                    .expect("method log should lock")
+                    .as_slice(),
+                ["getblockchaininfo", "testmempoolaccept"]
+            );
+        });
+    }
+
+    #[test]
+    fn rejected_multisig_preflight_blocks_authorization_and_broadcast() {
+        test_runtime().block_on(async {
+            let state = test_app_state(finalized_spend_state(TEST_FINALIZED_RAW_HEX));
+            let (client, server, cookie_path) = mock_rpc_client(vec![
+                signet_step(),
+                preflight_ok(
+                    TEST_FINALIZED_RAW_HEX,
+                    json!([{
+                        "txid": "d".repeat(64),
+                        "wtxid": "e".repeat(64),
+                        "allowed": false,
+                        "reject-reason": "min relay fee not met"
+                    }]),
+                ),
+            ]);
+
+            let operation = preflight_multisig_spend(client, &state, "legacy-draft".into())
+                .await
+                .expect("explicit Core rejection should be represented, not hidden");
+            finish_mock(server, cookie_path);
+            assert_eq!(operation.data.state, "preflight-rejected");
+            assert!(matches!(
+                operation.data.mempool_preflight,
+                crate::types::MempoolPreflightView::Rejected { .. }
+            ));
+
+            let confirmer = MockBroadcastConfirmer::new(true);
+            request_multisig_broadcast_authorization_with(&state, "legacy-draft", &confirmer)
+                .expect_err("rejected preflight must block authorization");
+            assert_eq!(confirmer.calls(), 0);
+            let error = broadcast_multisig_spend(
+                unreachable_rpc_client(),
+                &state,
+                "legacy-draft".into(),
+                "not-authorized".into(),
+            )
+            .await
+            .expect_err("rejected preflight must block broadcast before RPC");
+            assert!(error.contains("ne bi prihvatio ovu transakciju"));
+        });
+    }
+
+    #[test]
+    fn preflight_rpc_failure_becomes_indeterminate_and_blocks_later_stages() {
+        test_runtime().block_on(async {
+            let state = test_app_state(finalized_spend_state(TEST_FINALIZED_RAW_HEX));
+            let (client, server, cookie_path) = mock_rpc_client(vec![
+                signet_step(),
+                rpc_error("testmempoolaccept", "temporary preflight failure"),
+            ]);
+
+            let operation = preflight_multisig_spend(client, &state, "legacy-draft".into())
+                .await
+                .expect("RPC uncertainty should remain inspectable as indeterminate state");
+            finish_mock(server, cookie_path);
+            assert_eq!(operation.data.state, "preflight-indeterminate");
+            assert!(matches!(
+                operation.data.mempool_preflight,
+                crate::types::MempoolPreflightView::Indeterminate { .. }
+            ));
+
+            let confirmer = MockBroadcastConfirmer::new(true);
+            request_multisig_broadcast_authorization_with(&state, "legacy-draft", &confirmer)
+                .expect_err("indeterminate preflight must block authorization");
+            assert_eq!(confirmer.calls(), 0);
+            broadcast_multisig_spend(
+                unreachable_rpc_client(),
+                &state,
+                "legacy-draft".into(),
+                "not-authorized".into(),
+            )
+            .await
+            .expect_err("indeterminate preflight must block broadcast before RPC");
+        });
+    }
+
+    #[test]
+    fn native_authorization_is_not_opened_for_missing_rejected_or_indeterminate_preflight() {
+        let identity = finalized_transaction_identity(TEST_FINALIZED_RAW_HEX);
+        let cases = [
+            MempoolPreflight::NotRun,
+            MempoolPreflight::Rejected {
+                transaction_identity: identity.clone(),
+                reason: Some("policy rejection".into()),
+            },
+            MempoolPreflight::Indeterminate {
+                transaction_identity: identity,
+                reason: "malformed Core response".into(),
+            },
+        ];
+
+        for preflight in cases {
+            let mut draft = finalized_spend_state(TEST_FINALIZED_RAW_HEX);
+            draft.mempool_preflight = preflight;
+            let state = test_app_state(draft);
+            let confirmer = MockBroadcastConfirmer::new(true);
+            request_multisig_broadcast_authorization_with(&state, "legacy-draft", &confirmer)
+                .expect_err("non-accepted preflight must block native authorization");
+            assert_eq!(confirmer.calls(), 0);
+        }
+    }
+
+    #[test]
+    fn direct_multisig_broadcast_without_preflight_is_blocked_before_rpc() {
+        test_runtime().block_on(async {
+            let state = test_app_state(finalized_spend_state(TEST_FINALIZED_RAW_HEX));
+            let error = broadcast_multisig_spend(
+                unreachable_rpc_client(),
+                &state,
+                "legacy-draft".into(),
+                "renderer-cannot-bypass-preflight".into(),
+            )
+            .await
+            .expect_err("finalized transaction without accepted preflight must stop in Rust");
+            assert!(error.contains("Mempool provjera nije izvršena"));
+        });
+    }
+
+    #[test]
+    fn native_authorization_cancel_issues_no_broadcast_capability() {
+        test_runtime().block_on(async {
+            let state = test_app_state(ready_spend_state(TEST_FINALIZED_RAW_HEX));
+            let confirmer = MockBroadcastConfirmer::new(false);
+            let grant =
+                request_multisig_broadcast_authorization_with(&state, "legacy-draft", &confirmer)
+                    .expect("valid ready state should allow a native confirmation request");
+            assert!(grant.is_none());
+            assert_eq!(confirmer.calls(), 1);
+            assert_eq!(
+                state.drafts.lock().expect("draft state should lock")["legacy-draft"]
+                    .view("legacy-draft".into())
+                    .state,
+                "ready-to-broadcast"
+            );
+
+            let error = broadcast_multisig_spend(
+                unreachable_rpc_client(),
+                &state,
+                "legacy-draft".into(),
+                "missing-after-cancel".into(),
+            )
+            .await
+            .expect_err("cancellation must not authorize broadcast");
+            assert!(error.contains("Broadcast autorizacija nije valjana"));
+        });
+    }
+
+    #[test]
+    fn native_authorization_approve_mints_opaque_capability_without_broadcasting() {
+        let state = test_app_state(ready_spend_state(TEST_FINALIZED_RAW_HEX));
+        let confirmer = MockBroadcastConfirmer::new(true);
+
+        let grant =
+            request_multisig_broadcast_authorization_with(&state, "legacy-draft", &confirmer)
+                .expect("ready state should permit confirmation")
+                .expect("approval should mint an authorization");
+
+        assert_eq!(confirmer.calls(), 1);
+        assert_eq!(grant.authorization_id.len(), 64);
+        assert!(!grant.authorization_id.contains("legacy-draft"));
+        assert!(state
+            .drafts
+            .lock()
+            .expect("draft state should lock")
+            .contains_key("legacy-draft"));
+    }
+
+    #[test]
+    fn authorization_for_one_draft_cannot_broadcast_another_draft() {
+        test_runtime().block_on(async {
+            let state = test_app_state(ready_spend_state(TEST_FINALIZED_RAW_HEX));
+            state
+                .drafts
+                .lock()
+                .expect("draft state should lock")
+                .insert(
+                    "legacy-draft-b".into(),
+                    ready_spend_state(TEST_FINALIZED_RAW_HEX),
+                );
+            let grant = authorize_ready_draft(&state);
+
+            let error = broadcast_multisig_spend(
+                unreachable_rpc_client(),
+                &state,
+                "legacy-draft-b".into(),
+                grant.authorization_id,
+            )
+            .await
+            .expect_err("draft-bound authorization must fail before RPC for another draft");
+            assert!(error.contains("Broadcast autorizacija nije valjana"));
+        });
+    }
+
+    #[test]
+    fn authorization_for_one_transaction_cannot_broadcast_replaced_transaction() {
+        test_runtime().block_on(async {
+            let state = test_app_state(ready_spend_state(TEST_FINALIZED_RAW_HEX));
+            let grant = authorize_ready_draft(&state);
+            let replacement_raw_hex = "02000000000100feedface";
+            {
+                let mut drafts = state.drafts.lock().expect("draft state should lock");
+                let draft = drafts
+                    .get_mut("legacy-draft")
+                    .expect("draft should remain available");
+                draft.raw_hex = Some(replacement_raw_hex.into());
+                draft.mempool_preflight = MempoolPreflight::Accepted {
+                    transaction_identity: finalized_transaction_identity(replacement_raw_hex),
+                };
+            }
+
+            let error = broadcast_multisig_spend(
+                unreachable_rpc_client(),
+                &state,
+                "legacy-draft".into(),
+                grant.authorization_id,
+            )
+            .await
+            .expect_err("transaction-bound authorization must fail before RPC after replacement");
+            assert!(error.contains("Broadcast autorizacija nije valjana"));
+        });
+    }
+
+    #[test]
+    fn authorized_multisig_broadcast_sends_exact_raw_transaction_once() {
+        test_runtime().block_on(async {
+            let state = test_app_state(ready_spend_state(TEST_FINALIZED_RAW_HEX));
+            let grant = authorize_ready_draft(&state);
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(vec![
+                signet_step(),
+                rpc_ok("getnetworkinfo", json!({ "networkactive": true })),
+                send_raw_ok(TEST_FINALIZED_RAW_HEX, TEST_BROADCAST_TXID),
+                rpc_ok("getbalances", json!({ "mine": { "trusted": 0.000049 } })),
+            ]);
+
+            let operation = broadcast_multisig_spend(
+                client,
+                &state,
+                "legacy-draft".into(),
+                grant.authorization_id,
+            )
+            .await
+            .expect("approved current transaction should broadcast once");
+
+            finish_mock(server, cookie_path);
+            assert_eq!(operation.data.txid, TEST_BROADCAST_TXID);
+            assert!(!state
+                .drafts
+                .lock()
+                .expect("draft state should lock")
+                .contains_key("legacy-draft"));
+            assert_eq!(
+                method_log
+                    .lock()
+                    .expect("method log should lock")
+                    .as_slice(),
+                [
+                    "getblockchaininfo",
+                    "getnetworkinfo",
+                    "sendrawtransaction",
+                    "getbalances"
+                ]
+            );
+        });
+    }
+
+    #[test]
+    fn network_stop_consumes_authorization_and_preserves_ready_transaction() {
+        test_runtime().block_on(async {
+            let state = test_app_state(ready_spend_state(TEST_FINALIZED_RAW_HEX));
+            let grant = authorize_ready_draft(&state);
+            let authorization_id = grant.authorization_id;
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(vec![
+                signet_step(),
+                rpc_ok("getnetworkinfo", json!({ "networkactive": false })),
+            ]);
+
+            let error = broadcast_multisig_spend(
+                client,
+                &state,
+                "legacy-draft".into(),
+                authorization_id.clone(),
+            )
+            .await
+            .expect_err("disabled Core networking must stop broadcast");
+
+            finish_mock(server, cookie_path);
+            assert!(error.contains("network activity disabled"));
+            assert_eq!(
+                method_log
+                    .lock()
+                    .expect("method log should lock")
+                    .as_slice(),
+                ["getblockchaininfo", "getnetworkinfo"]
+            );
+            {
+                let draft = state.drafts.lock().expect("draft state should lock");
+                assert_eq!(
+                    draft["legacy-draft"].raw_hex.as_deref(),
+                    Some(TEST_FINALIZED_RAW_HEX)
+                );
+                assert!(!draft["legacy-draft"].broadcast_in_progress);
+            }
+
+            let replay = broadcast_multisig_spend(
+                unreachable_rpc_client(),
+                &state,
+                "legacy-draft".into(),
+                authorization_id,
+            )
+            .await
+            .expect_err("stopped attempt must consume its one-time authorization");
+            assert!(replay.contains("Broadcast autorizacija nije valjana"));
+        });
+    }
+
+    #[test]
+    fn send_failure_preserves_finalized_state_but_requires_fresh_authorization() {
+        test_runtime().block_on(async {
+            let state = test_app_state(ready_spend_state(TEST_FINALIZED_RAW_HEX));
+            let grant = authorize_ready_draft(&state);
+            let authorization_id = grant.authorization_id;
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(vec![
+                signet_step(),
+                rpc_ok("getnetworkinfo", json!({ "networkactive": true })),
+                send_raw_error(TEST_FINALIZED_RAW_HEX, "temporary send failure"),
+            ]);
+
+            let error = broadcast_multisig_spend(
+                client,
+                &state,
+                "legacy-draft".into(),
+                authorization_id.clone(),
+            )
+            .await
+            .expect_err("send failure must be reported");
+
+            finish_mock(server, cookie_path);
+            assert!(error.contains("temporary send failure"));
+            assert_eq!(
+                method_log
+                    .lock()
+                    .expect("method log should lock")
+                    .as_slice(),
+                ["getblockchaininfo", "getnetworkinfo", "sendrawtransaction"]
+            );
+            {
+                let draft = state.drafts.lock().expect("draft state should lock");
+                assert_eq!(
+                    draft["legacy-draft"].raw_hex.as_deref(),
+                    Some(TEST_FINALIZED_RAW_HEX)
+                );
+                assert!(!draft["legacy-draft"].broadcast_in_progress);
+            }
+
+            let replay = broadcast_multisig_spend(
+                unreachable_rpc_client(),
+                &state,
+                "legacy-draft".into(),
+                authorization_id,
+            )
+            .await
+            .expect_err("failed send must not make authorization reusable");
+            assert!(replay.contains("Broadcast autorizacija nije valjana"));
+        });
+    }
+
+    #[test]
+    fn expired_multisig_authorization_fails_before_rpc() {
+        test_runtime().block_on(async {
+            let state = test_app_state(ready_spend_state(TEST_FINALIZED_RAW_HEX));
+            let identity = finalized_transaction_identity(TEST_FINALIZED_RAW_HEX);
+            let grant = state
+                .broadcast_authorizations
+                .lock()
+                .expect("authorization store should lock")
+                .issue_expired_for_test("legacy-draft".into(), identity, 2);
+
+            let error = broadcast_multisig_spend(
+                unreachable_rpc_client(),
+                &state,
+                "legacy-draft".into(),
+                grant.authorization_id,
+            )
+            .await
+            .expect_err("expired authorization must stop before RPC");
+            assert!(error.contains("Broadcast autorizacija nije valjana"));
         });
     }
 
@@ -1986,11 +2858,22 @@ mod tests {
         )
     }
 
+    fn coordinator_step() -> MockRpcStep {
+        rpc_ok(
+            "getwalletinfo",
+            json!({
+                "descriptors": true,
+                "private_keys_enabled": false
+            }),
+        )
+    }
+
     fn rpc_ok(method: &'static str, result: Value) -> MockRpcStep {
         MockRpcStep {
             method,
             response: Ok(result),
             atomic_signer_wallet: None,
+            expected_raw_hex: None,
         }
     }
 
@@ -1999,6 +2882,34 @@ mod tests {
             method,
             response: Err(message),
             atomic_signer_wallet: None,
+            expected_raw_hex: None,
+        }
+    }
+
+    fn send_raw_ok(raw_hex: &'static str, txid: &'static str) -> MockRpcStep {
+        MockRpcStep {
+            method: "sendrawtransaction",
+            response: Ok(json!(txid)),
+            atomic_signer_wallet: None,
+            expected_raw_hex: Some(raw_hex),
+        }
+    }
+
+    fn send_raw_error(raw_hex: &'static str, message: &'static str) -> MockRpcStep {
+        MockRpcStep {
+            method: "sendrawtransaction",
+            response: Err(message),
+            atomic_signer_wallet: None,
+            expected_raw_hex: Some(raw_hex),
+        }
+    }
+
+    fn preflight_ok(raw_hex: &'static str, result: Value) -> MockRpcStep {
+        MockRpcStep {
+            method: "testmempoolaccept",
+            response: Ok(result),
+            atomic_signer_wallet: None,
+            expected_raw_hex: Some(raw_hex),
         }
     }
 
@@ -2007,6 +2918,7 @@ mod tests {
             method: "createwallet",
             response: Ok(json!({ "name": wallet_name, "warnings": [] })),
             atomic_signer_wallet: Some(wallet_name),
+            expected_raw_hex: None,
         }
     }
 
@@ -2015,6 +2927,7 @@ mod tests {
             method: "createwallet",
             response: Err(message),
             atomic_signer_wallet: Some(wallet_name),
+            expected_raw_hex: None,
         }
     }
 
@@ -2029,6 +2942,10 @@ mod tests {
             signed_by: Vec::new(),
             complete: false,
             relock_required: None,
+            raw_hex: None,
+            mempool_preflight: MempoolPreflight::NotRun,
+            preflight_version: 0,
+            broadcast_in_progress: false,
         }
     }
 
@@ -2045,6 +2962,40 @@ mod tests {
             relock_error: "initial lock failure".into(),
         });
         draft
+    }
+
+    fn threshold_spend_state() -> SpendState {
+        let mut draft = test_spend_state();
+        draft.psbt = "fully-signed-test-psbt".into();
+        draft.signed_by = vec!["CoreVault-K1".into(), "CoreVault-K2".into()];
+        draft.complete = true;
+        draft
+    }
+
+    fn finalized_spend_state(raw_hex: &'static str) -> SpendState {
+        let mut draft = threshold_spend_state();
+        draft.raw_hex = Some(raw_hex.into());
+        draft.preflight_version = 1;
+        draft
+    }
+
+    fn ready_spend_state(raw_hex: &'static str) -> SpendState {
+        let mut draft = finalized_spend_state(raw_hex);
+        draft.mempool_preflight = MempoolPreflight::Accepted {
+            transaction_identity: finalized_transaction_identity(raw_hex),
+        };
+        draft.preflight_version = 2;
+        draft
+    }
+
+    fn authorize_ready_draft(state: &AppState) -> BroadcastAuthorizationGrant {
+        request_multisig_broadcast_authorization_with(
+            state,
+            "legacy-draft",
+            &MockBroadcastConfirmer::new(true),
+        )
+        .expect("authorization request should be valid")
+        .expect("approved confirmation should issue a grant")
     }
 
     fn test_app_state(draft: SpendState) -> AppState {
@@ -2130,6 +3081,18 @@ mod tests {
                     .push(step.method.into());
                 if let Some(wallet_name) = step.atomic_signer_wallet {
                     assert_atomic_signer_create_request(&request, wallet_name);
+                }
+                if let Some(expected_raw_hex) = step.expected_raw_hex {
+                    let actual_raw_hex = if step.method == "testmempoolaccept" {
+                        request.pointer("/params/rawtxs/0").and_then(Value::as_str)
+                    } else {
+                        request.pointer("/params/hexstring").and_then(Value::as_str)
+                    };
+                    assert_eq!(
+                        actual_raw_hex,
+                        Some(expected_raw_hex),
+                        "privileged RPC must receive the exact finalized transaction"
+                    );
                 }
 
                 let (result, error) = match step.response {

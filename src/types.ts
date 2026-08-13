@@ -228,6 +228,22 @@ export interface SpendDraft {
   signedBy: string[];
   complete: boolean;
   relockRequired: SignerRelockRequired | null;
+  state:
+    | "awaiting-signatures"
+    | "partially-signed"
+    | "threshold-reached"
+    | "finalized"
+    | "preflight-rejected"
+    | "preflight-indeterminate"
+    | "ready-to-broadcast"
+    | "broadcasting";
+  finalized: boolean;
+  mempoolPreflight: MempoolPreflight;
+}
+
+export interface BroadcastAuthorizationGrant {
+  authorizationId: string;
+  expiresInSeconds: number;
 }
 
 export interface SignerRelockRequired {

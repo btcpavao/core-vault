@@ -150,12 +150,44 @@ export const demoSpend = (signedBy: string[] = []): Operation<SpendDraft> => ({
     signedBy,
     complete: signedBy.length >= 2,
     relockRequired: null,
+    state: signedBy.length >= 2 ? "threshold-reached" : signedBy.length === 1 ? "partially-signed" : "awaiting-signatures",
+    finalized: false,
+    mempoolPreflight: { state: "not-run" },
   },
   rpc: [
     trace(signedBy.length ? "walletprocesspsbt" : "walletcreatefundedpsbt", signedBy.length ? "Bitcoin Core dodaje lokalni potpis." : "Coordinator priprema transakciju bez potpisa.", {
       psbt: "[REDACTED]",
       complete: signedBy.length >= 2,
     }),
+  ],
+});
+
+export const demoFinalizeSpend = (draft: SpendDraft): Operation<SpendDraft> => ({
+  data: {
+    ...draft,
+    state: "finalized",
+    finalized: true,
+    mempoolPreflight: { state: "not-run" },
+  },
+  rpc: [
+    trace("finalizepsbt", "Bitcoin Core lokalno finalizira potpisani PSBT bez broadcasta.", {
+      complete: true,
+      hex: "[REDACTED]",
+    }),
+  ],
+});
+
+export const demoPreflightSpend = (draft: SpendDraft): Operation<SpendDraft> => ({
+  data: {
+    ...draft,
+    state: "ready-to-broadcast",
+    finalized: true,
+    mempoolPreflight: { state: "accepted" },
+  },
+  rpc: [
+    trace("testmempoolaccept", "Bitcoin Core lokalno provjerava mempool pravila bez broadcasta.", [
+      { allowed: true },
+    ]),
   ],
 });
 

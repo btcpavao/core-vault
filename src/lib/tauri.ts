@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/tauri";
 import type {
   BroadcastResult,
+  BroadcastAuthorizationGrant,
   BackupReceipt,
   ConnectionSettings,
   CoreStatus,
@@ -134,8 +135,19 @@ export const coreApi = {
     }),
   retrySignerLock: (draftId: string) =>
     invoke<Operation<SpendDraft>>("retry_signer_lock", { draftId }),
-  broadcast: (draftId: string) =>
-    invoke<Operation<BroadcastResult>>("finalize_and_broadcast", { draftId }),
+  finalizeMultisigSpend: (draftId: string) =>
+    invoke<Operation<SpendDraft>>("finalize_multisig_spend", { draftId }),
+  preflightMultisigSpend: (draftId: string) =>
+    invoke<Operation<SpendDraft>>("preflight_multisig_spend", { draftId }),
+  requestMultisigBroadcastAuthorization: (draftId: string) =>
+    invoke<BroadcastAuthorizationGrant | null>("request_multisig_broadcast_authorization", {
+      draftId,
+    }),
+  broadcastMultisigSpend: (draftId: string, authorizationId: string) =>
+    invoke<Operation<BroadcastResult>>("broadcast_multisig_spend", {
+      draftId,
+      authorizationId,
+    }),
 };
 
 export function choosePersonalBackupDestination(

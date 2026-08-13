@@ -124,11 +124,32 @@ describe("prototype architecture invariants", () => {
       "create_spend_draft",
       "sign_spend_draft",
       "retry_signer_lock",
-      "finalize_and_broadcast",
+      "finalize_multisig_spend",
+      "preflight_multisig_spend",
+      "request_multisig_broadcast_authorization",
+      "broadcast_multisig_spend",
     ]) {
       expect(main).toContain(command);
     }
+    expect(main).not.toContain("finalize_and_broadcast");
     expect(main).not.toContain("encrypt_signing_wallet");
+  });
+
+  it("requires privileged native authorization instead of a renderer approval boolean", () => {
+    const main = projectFile("src-tauri/src/main.rs");
+    const authorization = projectFile("src-tauri/src/broadcast_authorization.rs");
+    const adapter = projectFile("src/lib/tauri.ts");
+
+    expect(main).toMatch(/NativeDialogBroadcastConfirmer/);
+    expect(main).toMatch(
+      /async fn broadcast_multisig_spend\([\s\S]*?draft_id: String,[\s\S]*?authorization_id: String,[\s\S]*?Result<Operation<BroadcastResult>/,
+    );
+    expect(main).not.toMatch(
+      /async fn broadcast_multisig_spend\([^)]*(confirmed|user_approved|userApproved)/,
+    );
+    expect(adapter).not.toMatch(/confirmed\s*:|userApproved\s*:/);
+    expect(authorization).toMatch(/getrandom::getrandom/);
+    expect(authorization).toMatch(/pub fn consume/);
   });
 
   it("binds sensitive file operations to native-dialog capabilities", () => {

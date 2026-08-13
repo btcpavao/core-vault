@@ -24,7 +24,9 @@ Personal Vault passphrase-lifecycle tests mount the real React shell in jsdom an
 npx vitest run tests/passphrase-lifecycle.test.tsx
 ```
 
-Legacy 2-of-3 signer tests use a deterministic loopback JSON-RPC server to cover every signing/relock result pair, unlock failure, retry-lock success and failure, and direct backend attempts to bypass the stop through another signer or the combined finalization/broadcast command. A successful `walletlock` JSON-RPC response is the current practical authoritative lock confirmation; the retry action never unlocks or signs again. The relock-required workflow state is currently held only in memory, so restart-time wallet lock reconciliation remains future work.
+Legacy 2-of-3 signer tests use a deterministic loopback JSON-RPC server to cover every signing/relock result pair, unlock failure, retry-lock success and failure, and direct backend attempts to bypass the stop through another signer, finalization, preflight, authorization, or broadcast. A successful `walletlock` JSON-RPC response is the current practical authoritative lock confirmation; the retry action never unlocks or signs again. The relock-required workflow state is currently held only in memory, so restart-time wallet lock reconciliation remains future work.
+
+Legacy transaction-boundary tests prove that finalization calls neither `testmempoolaccept` nor `sendrawtransaction`, preflight uses the exact Rust-held finalized transaction and the shared fail-closed Personal Vault parser, and rejected or indeterminate results cannot reach native confirmation. Native approval is abstracted in tests so approve and cancel paths do not open a blocking OS dialog. The resulting authorization is opaque, draft- and transaction-bound, short-lived, one-time, and consumed before a send attempt. Separate tests cover wrong draft, replaced transaction, expiration, replay, disabled Bitcoin Core networking, exact single-send success, RPC failure recovery, and preservation of the relock hard stop.
 
 Atomic legacy-signer creation tests inspect the real loopback RPC request without printing its test-only secret. They require a non-empty passphrase in the initial `createwallet` request, verify encrypted/locked/private-key-enabled descriptor postconditions, preserve public receive/change identity extraction, reject private material, prove all three signer paths avoid `encryptwallet` and unnecessary unlocks, and preserve truthful partial-setup behavior. The explicit Regtest suite also creates one signer through the production domain function and checks the same state against real Bitcoin Core.
 
@@ -65,7 +67,7 @@ Do not use the preservation option in CI. If `bitcoind` is not available, the ex
 8. Create a send proposal; verify destination, amount, fee, change, RBF, and network.
 9. Sign, finalize, confirm mempool acceptance, and separately broadcast.
 10. Disable and re-enable P2P networking in the Engine Room; verify the UI never calls this an air gap.
-11. Open the preserved 2-of-3 workshop and repeat its existing Signet flow.
+11. Open the preserved 2-of-3 workshop and repeat its Signet flow: collect two signatures, finalize locally, run the transaction check, review Ready to Broadcast, choose Broadcast transaction, and approve or cancel the native OS confirmation. Confirm cancellation leaves the transaction ready and approval leads to only one broadcast attempt.
 
 ## Browser-only visual test
 

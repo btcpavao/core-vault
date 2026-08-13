@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod broadcast_authorization;
 mod file_capabilities;
 mod personal;
 #[cfg(test)]
@@ -9,6 +10,9 @@ mod security;
 mod types;
 mod vault;
 
+use broadcast_authorization::{
+    BroadcastAuthorizationGrant, BroadcastConfirmer, NativeDialogBroadcastConfirmer,
+};
 use file_capabilities::FileCapabilityGrant;
 use rpc::{autodetect_settings, inspect_core, offline_status, set_network_active, RpcClient};
 use tauri::State;
@@ -392,11 +396,51 @@ async fn retry_signer_lock(
 }
 
 #[tauri::command]
-async fn finalize_and_broadcast(
+async fn finalize_multisig_spend(
     state: State<'_, AppState>,
     draft_id: String,
+) -> Result<Operation<SpendDraftView>, String> {
+    vault::finalize_multisig_spend(client_from_state(&state)?, &state, draft_id).await
+}
+
+#[tauri::command]
+async fn preflight_multisig_spend(
+    state: State<'_, AppState>,
+    draft_id: String,
+) -> Result<Operation<SpendDraftView>, String> {
+    vault::preflight_multisig_spend(client_from_state(&state)?, &state, draft_id).await
+}
+
+#[tauri::command]
+async fn request_multisig_broadcast_authorization(
+    window: tauri::Window<tauri::Wry>,
+    state: State<'_, AppState>,
+    draft_id: String,
+) -> Result<Option<BroadcastAuthorizationGrant>, String> {
+    let prepared = vault::prepare_multisig_broadcast_authorization(&state, &draft_id)?;
+    let confirmer = NativeDialogBroadcastConfirmer::new(window);
+    let (prepared, approved) = tauri::async_runtime::spawn_blocking(move || {
+        let approved = confirmer.confirm(&prepared.summary)?;
+        Ok::<_, String>((prepared, approved))
+    })
+    .await
+    .map_err(|_| "Native broadcast potvrda nije dostupna.".to_string())??;
+    vault::complete_multisig_broadcast_authorization(&state, prepared, approved)
+}
+
+#[tauri::command]
+async fn broadcast_multisig_spend(
+    state: State<'_, AppState>,
+    draft_id: String,
+    authorization_id: String,
 ) -> Result<Operation<BroadcastResult>, String> {
-    vault::finalize_and_broadcast(client_from_state(&state)?, &state, draft_id).await
+    vault::broadcast_multisig_spend(
+        client_from_state(&state)?,
+        &state,
+        draft_id,
+        authorization_id,
+    )
+    .await
 }
 
 fn main() {
@@ -432,7 +476,10 @@ fn main() {
             create_spend_draft,
             sign_spend_draft,
             retry_signer_lock,
-            finalize_and_broadcast
+            finalize_multisig_spend,
+            preflight_multisig_spend,
+            request_multisig_broadcast_authorization,
+            broadcast_multisig_spend
         ])
         .run(tauri::generate_context!())
         .expect("Core Vault Tauri runtime failed");

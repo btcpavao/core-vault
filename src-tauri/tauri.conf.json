@@ -15,6 +15,7 @@
     "allowlist": {
       "all": false,
       "dialog": {
+        "ask": true,
         "open": true,
         "save": true
       }

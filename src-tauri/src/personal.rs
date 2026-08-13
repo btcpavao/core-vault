@@ -1063,7 +1063,10 @@ fn parse_outputs(decoded: &Value, change_position: i64) -> Vec<SpendOutputView> 
         .collect()
 }
 
-fn parse_mempool_preflight(value: Value, transaction_identity: String) -> MempoolPreflight {
+pub(crate) fn parse_mempool_preflight(
+    value: Value,
+    transaction_identity: String,
+) -> MempoolPreflight {
     let mut results = match serde_json::from_value::<Vec<TestMempoolAcceptResult>>(value) {
         Ok(results) => results,
         Err(_) => {
@@ -1120,7 +1123,10 @@ fn parse_mempool_preflight(value: Value, transaction_identity: String) -> Mempoo
     }
 }
 
-fn ensure_broadcast_preflight(preflight: &MempoolPreflight, raw_hex: &str) -> Result<(), String> {
+pub(crate) fn ensure_broadcast_preflight(
+    preflight: &MempoolPreflight,
+    raw_hex: &str,
+) -> Result<(), String> {
     let current_identity = finalized_transaction_identity(raw_hex);
     match preflight {
         MempoolPreflight::Accepted {

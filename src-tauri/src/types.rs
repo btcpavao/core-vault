@@ -1,3 +1,4 @@
+use crate::broadcast_authorization::BroadcastAuthorizationStore;
 use crate::file_capabilities::FileCapabilityStore;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -353,6 +354,9 @@ pub struct SpendDraftView {
     pub signed_by: Vec<String>,
     pub complete: bool,
     pub relock_required: Option<SignerRelockRequired>,
+    pub state: String,
+    pub finalized: bool,
+    pub mempool_preflight: MempoolPreflightView,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -375,10 +379,40 @@ pub struct SpendState {
     pub signed_by: Vec<String>,
     pub complete: bool,
     pub relock_required: Option<SignerRelockRequired>,
+    pub raw_hex: Option<String>,
+    pub mempool_preflight: MempoolPreflight,
+    pub preflight_version: u64,
+    pub broadcast_in_progress: bool,
 }
 
 impl SpendState {
     pub fn view(&self, draft_id: String) -> SpendDraftView {
+        let current_identity = self.raw_hex.as_deref().map(finalized_transaction_identity);
+        let preflight = self.mempool_preflight.view();
+        let state = if self.broadcast_in_progress {
+            "broadcasting"
+        } else if let Some(identity) = current_identity.as_deref() {
+            match &self.mempool_preflight {
+                MempoolPreflight::Accepted {
+                    transaction_identity,
+                } if transaction_identity == identity => "ready-to-broadcast",
+                MempoolPreflight::Rejected {
+                    transaction_identity,
+                    ..
+                } if transaction_identity == identity => "preflight-rejected",
+                MempoolPreflight::Indeterminate {
+                    transaction_identity,
+                    ..
+                } if transaction_identity == identity => "preflight-indeterminate",
+                _ => "finalized",
+            }
+        } else if self.complete && self.signed_by.len() >= 2 {
+            "threshold-reached"
+        } else if self.signed_by.is_empty() {
+            "awaiting-signatures"
+        } else {
+            "partially-signed"
+        };
         SpendDraftView {
             draft_id,
             destination: self.destination.clone(),
@@ -388,6 +422,9 @@ impl SpendState {
             signed_by: self.signed_by.clone(),
             complete: self.complete,
             relock_required: self.relock_required.clone(),
+            state: state.into(),
+            finalized: self.raw_hex.is_some(),
+            mempool_preflight: preflight,
         }
     }
 }
@@ -410,4 +447,5 @@ pub struct AppState {
     pub personal_drafts: Mutex<HashMap<String, PersonalSpendState>>,
     pub backed_up_wallets: Mutex<HashMap<String, BackupReceipt>>,
     pub file_capabilities: Mutex<FileCapabilityStore>,
+    pub broadcast_authorizations: Mutex<BroadcastAuthorizationStore>,
 }
