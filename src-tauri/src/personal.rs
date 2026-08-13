@@ -1,4 +1,7 @@
+#[cfg(test)]
+use crate::broadcast_authorization::BroadcastConfirmer;
 use crate::{
+    broadcast_authorization::{BroadcastAuthorizationGrant, BroadcastPurpose, BroadcastSummary},
     file_capabilities::{consume_file_capability, FileOperation},
     rpc::{ensure_test_chain, sanitize_rpc_text, RpcClient},
     security::validate_wallet_name,
@@ -587,6 +590,8 @@ pub async fn create_spend_proposal(
         complete: false,
         raw_hex: None,
         mempool_preflight: MempoolPreflight::NotRun,
+        preflight_version: 0,
+        broadcast_in_progress: false,
     };
     let view = spend.view(draft_id.clone());
     state
@@ -614,6 +619,9 @@ pub async fn sign_spend_proposal(
         .cloned()
         .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
     let passphrase = Zeroizing::new(passphrase);
+    if snapshot.broadcast_in_progress {
+        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+    }
     if passphrase.is_empty() {
         return Err("Unesite wallet passphrase za ovaj potpis.".into());
     }
@@ -675,7 +683,7 @@ pub async fn sign_spend_proposal(
     let draft = drafts
         .get_mut(&draft_id)
         .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
-    if draft.psbt != snapshot.psbt {
+    if draft.psbt != snapshot.psbt || draft.broadcast_in_progress {
         return Err(
             "Spend proposal promijenjen je tijekom potpisa. Ponovno ga pregledajte.".into(),
         );
@@ -687,7 +695,13 @@ pub async fn sign_spend_proposal(
         .unwrap_or(false);
     draft.raw_hex = None;
     draft.mempool_preflight = MempoolPreflight::NotRun;
+    draft.preflight_version = draft.preflight_version.saturating_add(1);
     let view = draft.view(draft_id);
+    state
+        .broadcast_authorizations
+        .lock()
+        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .revoke_draft(&view.draft_id);
     Ok(Operation {
         data: view,
         rpc: traces,
@@ -708,6 +722,9 @@ pub async fn finalize_spend_proposal(
         .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
     if !snapshot.complete {
         return Err("PSBT još nema potpune potpise i ne može se finalizirati.".into());
+    }
+    if snapshot.broadcast_in_progress {
+        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
     }
     let mut traces = Vec::new();
     ensure_test_chain(&client, &mut traces).await?;
@@ -738,14 +755,20 @@ pub async fn finalize_spend_proposal(
     let draft = drafts
         .get_mut(&draft_id)
         .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
-    if draft.psbt != snapshot.psbt {
+    if draft.psbt != snapshot.psbt || draft.broadcast_in_progress {
         return Err(
             "Spend proposal promijenjen je tijekom finalizacije. Ponovno ga pregledajte.".into(),
         );
     }
     draft.raw_hex = Some(raw_hex);
     draft.mempool_preflight = MempoolPreflight::NotRun;
+    draft.preflight_version = draft.preflight_version.saturating_add(1);
     let view = draft.view(draft_id);
+    state
+        .broadcast_authorizations
+        .lock()
+        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .revoke_draft(&view.draft_id);
     Ok(Operation {
         data: view,
         rpc: traces,
@@ -768,6 +791,9 @@ pub async fn preflight_spend_proposal(
         .raw_hex
         .clone()
         .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
+    if snapshot.broadcast_in_progress {
+        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+    }
     let transaction_identity = finalized_transaction_identity(&raw_hex);
     let mut traces = Vec::new();
 
@@ -805,24 +831,113 @@ pub async fn preflight_spend_proposal(
     let draft = drafts
         .get_mut(&draft_id)
         .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
-    if draft.raw_hex.as_deref() != Some(raw_hex.as_str()) {
+    if draft.raw_hex.as_deref() != Some(raw_hex.as_str()) || draft.broadcast_in_progress {
         return Err(
             "Finalizirana transakcija promijenjena je tijekom mempool provjere. Pokrenite provjeru ponovno."
                 .into(),
         );
     }
     draft.mempool_preflight = preflight;
+    draft.preflight_version = draft.preflight_version.saturating_add(1);
     let view = draft.view(draft_id);
+    state
+        .broadcast_authorizations
+        .lock()
+        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .revoke_draft(&view.draft_id);
     Ok(Operation {
         data: view,
         rpc: traces,
     })
 }
 
+#[derive(Clone, Debug)]
+pub struct PreparedPersonalBroadcastAuthorization {
+    draft_id: String,
+    transaction_identity: String,
+    preflight_version: u64,
+    pub summary: BroadcastSummary,
+}
+
+pub fn prepare_personal_broadcast_authorization(
+    state: &AppState,
+    draft_id: &str,
+) -> Result<PreparedPersonalBroadcastAuthorization, String> {
+    let drafts = state
+        .personal_drafts
+        .lock()
+        .map_err(|_| "PSBT state nije dostupan.".to_string())?;
+    let draft = drafts
+        .get(draft_id)
+        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+    let (_, transaction_identity) = ensure_personal_ready_for_broadcast(draft)?;
+    Ok(PreparedPersonalBroadcastAuthorization {
+        draft_id: draft_id.into(),
+        transaction_identity,
+        preflight_version: draft.preflight_version,
+        summary: BroadcastSummary {
+            vault_name: draft.wallet_name.clone(),
+            destination: draft.destination.clone(),
+            amount_sats: draft.amount_sats,
+            fee_sats: draft.fee_sats,
+            network: draft.network.clone(),
+        },
+    })
+}
+
+pub fn complete_personal_broadcast_authorization(
+    state: &AppState,
+    prepared: PreparedPersonalBroadcastAuthorization,
+    approved: bool,
+) -> Result<Option<BroadcastAuthorizationGrant>, String> {
+    if !approved {
+        return Ok(None);
+    }
+    let drafts = state
+        .personal_drafts
+        .lock()
+        .map_err(|_| "PSBT state nije dostupan.".to_string())?;
+    let draft = drafts
+        .get(&prepared.draft_id)
+        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+    let (_, current_identity) = ensure_personal_ready_for_broadcast(draft)?;
+    if current_identity != prepared.transaction_identity
+        || draft.preflight_version != prepared.preflight_version
+    {
+        return Err(
+            "Transakcija ili njezina mempool provjera promijenila se tijekom potvrde. Ponovno pregledajte i potvrdite broadcast."
+                .into(),
+        );
+    }
+    let grant = state
+        .broadcast_authorizations
+        .lock()
+        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .issue(
+            BroadcastPurpose::PersonalTransaction,
+            prepared.draft_id,
+            prepared.transaction_identity,
+            prepared.preflight_version,
+        )?;
+    Ok(Some(grant))
+}
+
+#[cfg(test)]
+pub(crate) fn request_personal_broadcast_authorization_with<C: BroadcastConfirmer>(
+    state: &AppState,
+    draft_id: &str,
+    confirmer: &C,
+) -> Result<Option<BroadcastAuthorizationGrant>, String> {
+    let prepared = prepare_personal_broadcast_authorization(state, draft_id)?;
+    let approved = confirmer.confirm(&prepared.summary)?;
+    complete_personal_broadcast_authorization(state, prepared, approved)
+}
+
 pub async fn broadcast_spend_proposal(
     client: RpcClient,
     state: &AppState,
     draft_id: String,
+    authorization_id: String,
 ) -> Result<Operation<PersonalBroadcast>, String> {
     let snapshot = state
         .personal_drafts
@@ -831,59 +946,129 @@ pub async fn broadcast_spend_proposal(
         .get(&draft_id)
         .cloned()
         .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+    let (_, transaction_identity) = ensure_personal_ready_for_broadcast(&snapshot)?;
+    state
+        .broadcast_authorizations
+        .lock()
+        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .consume(
+            &authorization_id,
+            BroadcastPurpose::PersonalTransaction,
+            &draft_id,
+            &transaction_identity,
+            snapshot.preflight_version,
+        )?;
+    {
+        let mut drafts = state
+            .personal_drafts
+            .lock()
+            .map_err(|_| "PSBT state nije dostupan.".to_string())?;
+        let draft = drafts
+            .get_mut(&draft_id)
+            .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+        let (_, current_identity) = ensure_personal_ready_for_broadcast(draft)?;
+        if current_identity != transaction_identity
+            || draft.preflight_version != snapshot.preflight_version
+        {
+            return Err(
+                "Transakcija ili preflight promijenili su se prije broadcasta. Autorizacija je potrošena."
+                    .into(),
+            );
+        }
+        draft.broadcast_in_progress = true;
+    }
+
     let raw_hex = snapshot
         .raw_hex
-        .clone()
-        .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
-    ensure_broadcast_preflight(&snapshot.mempool_preflight, &raw_hex)?;
+        .as_deref()
+        .ok_or_else(|| "Transakcija više nije finalizirana.".to_string())?;
     let mut traces = Vec::new();
-    ensure_test_chain(&client, &mut traces).await?;
-    let network = client
-        .call(
-            "getnetworkinfo",
-            json!({}),
-            None,
-            "Provjerava da je Bitcoin Core P2P mrežna aktivnost dostupna prije broadcasta.",
-            None,
-            false,
-            &mut traces,
-        )
-        .await?;
-    if network.get("networkactive").and_then(Value::as_bool) != Some(true) {
-        return Err(
-            "Broadcast je onemogućen dok je Bitcoin Core network activity disabled.".into(),
-        );
+    let attempt = async {
+        ensure_test_chain(&client, &mut traces).await?;
+        let network = client
+            .call(
+                "getnetworkinfo",
+                json!({}),
+                None,
+                "Provjerava da je Bitcoin Core P2P mrežna aktivnost dostupna prije broadcasta.",
+                None,
+                false,
+                &mut traces,
+            )
+            .await?;
+        if network.get("networkactive").and_then(Value::as_bool) != Some(true) {
+            return Err(
+                "Broadcast je onemogućen dok je Bitcoin Core network activity disabled. Autorizacija je potrošena."
+                    .into(),
+            );
+        }
+        client
+            .call(
+                "sendrawtransaction",
+                json!({ "hexstring": raw_hex }),
+                None,
+                "Bitcoin Core broadcasta privilegirano autoriziranu finaliziranu transakciju.",
+                Some(json!({ "hexstring": "[REDACTED]" })),
+                false,
+                &mut traces,
+            )
+            .await?
+            .as_str()
+            .filter(|value| is_txid(value))
+            .map(str::to_string)
+            .ok_or_else(|| "Bitcoin Core nije vratio valjani txid.".to_string())
     }
-    let txid = client
-        .call(
-            "sendrawtransaction",
-            json!({ "hexstring": raw_hex }),
-            None,
-            "Bitcoin Core broadcasta finaliziranu transakciju nakon zasebne potvrde.",
-            Some(json!({ "hexstring": "[REDACTED]" })),
-            false,
-            &mut traces,
-        )
-        .await?
-        .as_str()
-        .filter(|value| is_txid(value))
-        .ok_or_else(|| "Bitcoin Core nije vratio valjani txid.".to_string())?
-        .to_string();
-    state
-        .personal_drafts
-        .lock()
-        .map_err(|_| "PSBT state nije dostupan.".to_string())?
-        .remove(&draft_id);
-    Ok(Operation {
-        data: PersonalBroadcast {
-            txid,
-            wallet_name: snapshot.wallet_name,
-            network: snapshot.network,
-            sent_sats: snapshot.amount_sats,
-            fee_sats: snapshot.fee_sats,
-        },
-        rpc: traces,
-    })
+    .await;
+
+    match attempt {
+        Ok(txid) => {
+            state
+                .personal_drafts
+                .lock()
+                .map_err(|_| "PSBT state nije dostupan.".to_string())?
+                .remove(&draft_id);
+            state
+                .broadcast_authorizations
+                .lock()
+                .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+                .revoke_draft(&draft_id);
+            Ok(Operation {
+                data: PersonalBroadcast {
+                    txid,
+                    wallet_name: snapshot.wallet_name,
+                    network: snapshot.network,
+                    sent_sats: snapshot.amount_sats,
+                    fee_sats: snapshot.fee_sats,
+                },
+                rpc: traces,
+            })
+        }
+        Err(error) => {
+            if let Ok(mut drafts) = state.personal_drafts.lock() {
+                if let Some(draft) = drafts.get_mut(&draft_id) {
+                    draft.broadcast_in_progress = false;
+                }
+            }
+            Err(error)
+        }
+    }
+}
+
+fn ensure_personal_ready_for_broadcast(
+    draft: &PersonalSpendState,
+) -> Result<(&str, String), String> {
+    if draft.broadcast_in_progress {
+        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+    }
+    if !draft.complete {
+        return Err("PSBT još nema potpune potpise.".into());
+    }
+    let raw_hex = draft
+        .raw_hex
+        .as_deref()
+        .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
+    ensure_broadcast_preflight(&draft.mempool_preflight, raw_hex)?;
+    Ok((raw_hex, finalized_transaction_identity(raw_hex)))
 }
 
 async fn inspect_personal_wallet(
@@ -1248,6 +1433,14 @@ mod tests {
     use super::*;
     use crate::types::ConnectionSettings;
 
+    struct ApproveBroadcast;
+
+    impl BroadcastConfirmer for ApproveBroadcast {
+        fn confirm(&self, _summary: &BroadcastSummary) -> Result<bool, String> {
+            Ok(true)
+        }
+    }
+
     const TEST_RAW_HEX: &str = "02000000000100";
 
     #[test]
@@ -1474,14 +1667,28 @@ mod tests {
 
     fn run_broadcast_with_preflight(preflight: MempoolPreflight) -> String {
         let state = AppState::default();
+        let accepted = matches!(preflight, MempoolPreflight::Accepted { .. });
         state
             .personal_drafts
             .lock()
             .expect("test draft state should lock")
             .insert("gate-test".into(), test_spend_state(preflight));
+        let authorization_id = if accepted {
+            request_personal_broadcast_authorization_with(&state, "gate-test", &ApproveBroadcast)
+                .expect("accepted test draft should allow authorization")
+                .expect("approval should mint a test authorization")
+                .authorization_id
+        } else {
+            "not-authorized".into()
+        };
         let client = unreachable_rpc_client();
         test_runtime()
-            .block_on(broadcast_spend_proposal(client, &state, "gate-test".into()))
+            .block_on(broadcast_spend_proposal(
+                client,
+                &state,
+                "gate-test".into(),
+                authorization_id,
+            ))
             .expect_err("test broadcast should stop before sendrawtransaction")
     }
 
@@ -1511,6 +1718,8 @@ mod tests {
             complete: true,
             raw_hex: Some(TEST_RAW_HEX.into()),
             mempool_preflight,
+            preflight_version: 1,
+            broadcast_in_progress: false,
         }
     }
 

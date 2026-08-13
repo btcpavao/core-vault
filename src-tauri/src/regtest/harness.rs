@@ -298,6 +298,58 @@ impl RegtestNode {
         Ok(wallets)
     }
 
+    pub async fn core_version(&self) -> Result<u64, String> {
+        self.rpc("getnetworkinfo", json!({}), None, false)
+            .await?
+            .get("version")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| "fixture Core nije vratio numeričku verziju".to_string())
+    }
+
+    pub async fn decode_psbt(&self, psbt: &str) -> Result<Value, String> {
+        self.rpc("decodepsbt", json!({ "psbt": psbt }), None, true)
+            .await
+    }
+
+    pub async fn decode_raw_transaction(&self, raw_hex: &str) -> Result<Value, String> {
+        self.rpc(
+            "decoderawtransaction",
+            json!({ "hexstring": raw_hex }),
+            None,
+            true,
+        )
+        .await
+    }
+
+    pub async fn wallet_transaction(&self, wallet_name: &str, txid: &str) -> Result<Value, String> {
+        self.rpc(
+            "gettransaction",
+            json!({ "txid": txid, "include_watchonly": true }),
+            Some(wallet_name),
+            true,
+        )
+        .await
+    }
+
+    pub async fn wallet_balance_sats(&self, wallet_name: &str) -> Result<u64, String> {
+        let balances = self
+            .rpc("getbalances", json!({}), Some(wallet_name), false)
+            .await?;
+        let trusted = balances
+            .pointer("/mine/trusted")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        Ok((trusted * 100_000_000.0).round().max(0.0) as u64)
+    }
+
+    pub async fn mempool_contains(&self, txid: &str) -> Result<bool, String> {
+        Ok(self
+            .rpc("getrawmempool", json!({ "verbose": false }), None, false)
+            .await?
+            .as_array()
+            .is_some_and(|txids| txids.iter().any(|value| value.as_str() == Some(txid))))
+    }
+
     pub async fn shutdown(mut self) -> Result<ShutdownReport, String> {
         self.assert_regtest().await?;
         let stop_result = self.rpc("stop", json!({}), None, true).await;

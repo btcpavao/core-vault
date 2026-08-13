@@ -497,7 +497,12 @@ export default function SpatialApp() {
     void run(async () => {
       if (mode === "demo") setBroadcast({ ...demoBroadcast, walletName: spend.walletName, sentSats: spend.amountSats, feeSats: spend.feeSats });
       else {
-        const operation = await coreApi.broadcastPersonalSpend(spend.draftId);
+        const authorization = await coreApi.requestPersonalBroadcastAuthorization(spend.draftId);
+        if (!authorization) return;
+        const operation = await coreApi.broadcastPersonalSpend(
+          spend.draftId,
+          authorization.authorizationId,
+        );
         setBroadcast(operation.data);
         appendRpc(operation.rpc);
         if (selectedWallet) {

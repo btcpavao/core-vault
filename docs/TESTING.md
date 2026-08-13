@@ -18,6 +18,8 @@ File-capability unit tests cover valid one-time use, replay rejection, operation
 
 Personal Vault mempool-preflight tests require exactly one structurally valid `testmempoolaccept` result with explicit `allowed: true`. Missing, null, malformed, rejected, empty, or ambiguous responses remain non-broadcastable. The Rust broadcast boundary also tests no-preflight, rejected, indeterminate, exact-finalized-transaction identity, and accepted progression states.
 
+Personal Vault broadcast now uses the same privileged native-confirmation capability model as legacy multisig. Rust validates the current finalized transaction and Accepted preflight before displaying the OS dialog, then mints a three-minute opaque authorization bound to the draft, transaction identity, and current preflight version. The broadcast command consumes that authorization before checking current chain/network state or calling `sendrawtransaction`; renderer confirmation state alone is not authority.
+
 Personal Vault passphrase-lifecycle tests mount the real React shell in jsdom and exercise its actual DOM inputs with a mocked typed Tauri client. They prove that create, passphrase-change, and signing secrets are cleared before privileged promises settle and remain empty after success or failure; failed signing remains retryable, and closing the create interaction removes its secrets. Run this focused suite with:
 
 ```bash
@@ -30,7 +32,7 @@ Legacy transaction-boundary tests prove that finalization calls neither `testmem
 
 Atomic legacy-signer creation tests inspect the real loopback RPC request without printing its test-only secret. They require a non-empty passphrase in the initial `createwallet` request, verify encrypted/locked/private-key-enabled descriptor postconditions, preserve public receive/change identity extraction, reject private material, prove all three signer paths avoid `encryptwallet` and unnecessary unlocks, and preserve truthful partial-setup behavior. The explicit Regtest suite also creates one signer through the production domain function and checks the same state against real Bitcoin Core.
 
-## Isolated Regtest golden recovery test
+## Isolated Regtest golden tests
 
 The real Bitcoin Core integration test is explicit and is not started by `npm test` or `npm run verify`:
 
@@ -44,7 +46,15 @@ The command discovers `bitcoind` through `PATH`. To use a specific executable, p
 BITCOIND=/absolute/path/to/bitcoind npm run test:regtest
 ```
 
-The harness creates a unique `core-vault-regtest-*` directory under the operating system's temporary directory, starts only Regtest on a collision-resistant loopback RPC port, authenticates with that node's cookie, and refuses wallet mutations unless Core reports `chain == "regtest"`. It never accepts an existing datadir. The recovery flow also finalizes the restored wallet's signing proof and requires a typed Accepted preflight from real Bitcoin Core without broadcasting it. The owned process is shut down and only the marked temporary directory is removed after the test.
+The harness creates a unique `core-vault-regtest-*` directory under the operating system's temporary directory, starts only Regtest on a collision-resistant loopback RPC port, authenticates with that node's cookie, and refuses wallet mutations unless Core reports `chain == "regtest"`. It never accepts an existing datadir. The recovery flow also finalizes the restored wallet's signing proof and requires a typed Accepted preflight from real Bitcoin Core without broadcasting it.
+
+The golden Personal Vault spend test uses production Rust/domain functions to create an encrypted wallet, verify its lock, receive and confirm fixture funds, build and verify a funded PSBT review, reject a wrong passphrase without changing the proposal, sign and re-lock, finalize without broadcast, obtain a strict Accepted preflight, exercise privileged test confirmation, prove a network-disabled attempt consumes its authorization, broadcast with a fresh authorization, observe the txid in the real mempool, mine it, and verify recipient funds, sender activity, fee, change, and post-spend balance. Run only that proof with:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml --locked regtest::tests::golden_personal_vault_spend_lifecycle -- --exact --include-ignored --test-threads=1
+```
+
+The owned process is shut down and only the marked temporary directory is removed after each test. These tests do not yet prove the complete real-Core 2-of-3 multisig lifecycle.
 
 For a failing local test that needs inspection, temporary state can be retained explicitly:
 

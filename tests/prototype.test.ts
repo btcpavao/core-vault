@@ -144,11 +144,19 @@ describe("prototype architecture invariants", () => {
     expect(main).toMatch(
       /async fn broadcast_multisig_spend\([\s\S]*?draft_id: String,[\s\S]*?authorization_id: String,[\s\S]*?Result<Operation<BroadcastResult>/,
     );
+    expect(main).toMatch(
+      /async fn broadcast_personal_spend_proposal\([\s\S]*?draft_id: String,[\s\S]*?authorization_id: String,[\s\S]*?Result<Operation<PersonalBroadcast>/,
+    );
+    expect(main).toContain("request_personal_broadcast_authorization");
     expect(main).not.toMatch(
       /async fn broadcast_multisig_spend\([^)]*(confirmed|user_approved|userApproved)/,
     );
+    expect(main).not.toMatch(
+      /async fn broadcast_personal_spend_proposal\([^)]*(confirmed|user_approved|userApproved)/,
+    );
     expect(adapter).not.toMatch(/confirmed\s*:|userApproved\s*:/);
     expect(authorization).toMatch(/getrandom::getrandom/);
+    expect(authorization).toContain("PersonalTransaction");
     expect(authorization).toMatch(/pub fn consume/);
   });
 
@@ -183,7 +191,15 @@ describe("prototype architecture invariants", () => {
     const frontendTypes = projectFile("src/types.ts");
 
     expect(main).toContain("preflight_personal_spend_proposal");
-    expect(personal).toContain("ensure_broadcast_preflight(&snapshot.mempool_preflight, &raw_hex)");
+    expect(main).toContain("request_personal_broadcast_authorization");
+    expect(personal).toContain("ensure_broadcast_preflight(&draft.mempool_preflight, raw_hex)");
+    expect(personal).toContain("BroadcastPurpose::PersonalTransaction");
+    expect(main).toMatch(
+      /async fn broadcast_personal_spend_proposal\([\s\S]*?draft_id: String,[\s\S]*?authorization_id: String/,
+    );
+    expect(main).not.toMatch(
+      /async fn broadcast_personal_spend_proposal\([^)]*(confirmed|user_approved|userApproved)/,
+    );
     expect(personal).toMatch(/Some\(true\)[\s\S]*?MempoolPreflight::Accepted/);
     expect(frontendTypes).toContain('{ state: "accepted" }');
     expect(frontendTypes).toContain('{ state: "indeterminate"; reason: string }');

@@ -12,6 +12,7 @@ const AUTHORIZATION_ERROR: &str =
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BroadcastPurpose {
+    PersonalTransaction,
     LegacyMultisigTransaction,
 }
 

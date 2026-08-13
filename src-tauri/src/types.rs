@@ -239,6 +239,8 @@ pub struct PersonalSpendState {
     pub complete: bool,
     pub raw_hex: Option<String>,
     pub mempool_preflight: MempoolPreflight,
+    pub preflight_version: u64,
+    pub broadcast_in_progress: bool,
 }
 
 impl PersonalSpendState {
@@ -260,7 +262,9 @@ impl PersonalSpendState {
             total_debit_sats: self.amount_sats.saturating_add(self.fee_sats),
             outputs: self.outputs.clone(),
             replaceable: self.replaceable,
-            state: if accepted_for_current_transaction {
+            state: if self.broadcast_in_progress {
+                "broadcasting"
+            } else if accepted_for_current_transaction {
                 "ready-to-broadcast"
             } else if self.raw_hex.is_some() {
                 "preflight-required"

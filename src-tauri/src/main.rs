@@ -270,11 +270,35 @@ async fn preflight_personal_spend_proposal(
 }
 
 #[tauri::command]
+async fn request_personal_broadcast_authorization(
+    window: tauri::Window<tauri::Wry>,
+    state: State<'_, AppState>,
+    draft_id: String,
+) -> Result<Option<BroadcastAuthorizationGrant>, String> {
+    let prepared = personal::prepare_personal_broadcast_authorization(&state, &draft_id)?;
+    let confirmer = NativeDialogBroadcastConfirmer::new(window);
+    let (prepared, approved) = tauri::async_runtime::spawn_blocking(move || {
+        let approved = confirmer.confirm(&prepared.summary)?;
+        Ok::<_, String>((prepared, approved))
+    })
+    .await
+    .map_err(|_| "Native broadcast potvrda nije dostupna.".to_string())??;
+    personal::complete_personal_broadcast_authorization(&state, prepared, approved)
+}
+
+#[tauri::command]
 async fn broadcast_personal_spend_proposal(
     state: State<'_, AppState>,
     draft_id: String,
+    authorization_id: String,
 ) -> Result<Operation<PersonalBroadcast>, String> {
-    personal::broadcast_spend_proposal(client_from_state(&state)?, &state, draft_id).await
+    personal::broadcast_spend_proposal(
+        client_from_state(&state)?,
+        &state,
+        draft_id,
+        authorization_id,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -465,6 +489,7 @@ fn main() {
             sign_personal_spend_proposal,
             finalize_personal_spend_proposal,
             preflight_personal_spend_proposal,
+            request_personal_broadcast_authorization,
             broadcast_personal_spend_proposal,
             create_signing_wallet,
             choose_signer_backup_destination,

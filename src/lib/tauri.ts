@@ -89,8 +89,15 @@ export const coreApi = {
     invoke<Operation<PersonalSpendView>>("finalize_personal_spend_proposal", { draftId }),
   preflightPersonalSpend: (draftId: string) =>
     invoke<Operation<PersonalSpendView>>("preflight_personal_spend_proposal", { draftId }),
-  broadcastPersonalSpend: (draftId: string) =>
-    invoke<Operation<PersonalBroadcast>>("broadcast_personal_spend_proposal", { draftId }),
+  requestPersonalBroadcastAuthorization: (draftId: string) =>
+    invoke<BroadcastAuthorizationGrant | null>("request_personal_broadcast_authorization", {
+      draftId,
+    }),
+  broadcastPersonalSpend: (draftId: string, authorizationId: string) =>
+    invoke<Operation<PersonalBroadcast>>("broadcast_personal_spend_proposal", {
+      draftId,
+      authorizationId,
+    }),
   createSigner: (label: string, walletName: string, passphrase: string) =>
     invoke<Operation<SigningWallet>>("create_signing_wallet", {
       label,
