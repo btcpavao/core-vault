@@ -287,6 +287,8 @@ pub struct SigningWallet {
     pub descriptors: bool,
     pub private_keys_enabled: bool,
     pub encrypted: bool,
+    pub locked: bool,
+    pub public_identity: Option<SignerPublic>,
     pub backup_path: Option<String>,
 }
 

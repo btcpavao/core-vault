@@ -1,6 +1,6 @@
 use crate::{
     file_capabilities::{consume_file_capability, FileOperation},
-    rpc::{ensure_signet, sanitize_rpc_text, RpcClient},
+    rpc::{ensure_signet, ensure_test_chain, sanitize_rpc_text, RpcClient},
     security::{contains_private_material, validate_public_backup, validate_wallet_name},
     types::{
         AppState, BroadcastResult, Operation, PublicVaultBackup, ReceiveSnapshot, RpcTrace,
@@ -31,11 +31,14 @@ pub async fn create_signing_wallet(
     client: RpcClient,
     label: String,
     wallet_name: String,
+    passphrase: String,
 ) -> Result<Operation<SigningWallet>, String> {
     validate_label(&label)?;
     validate_wallet_name(&wallet_name)?;
+    validate_signer_passphrase(&passphrase)?;
+    let passphrase = Zeroizing::new(passphrase);
     let mut traces = Vec::new();
-    ensure_signet(&client, &mut traces).await?;
+    ensure_test_chain(&client, &mut traces).await?;
     client
         .call(
             "createwallet",
@@ -43,56 +46,31 @@ pub async fn create_signing_wallet(
                 "wallet_name": wallet_name,
                 "disable_private_keys": false,
                 "blank": false,
-                "passphrase": "",
+                "passphrase": passphrase.as_str(),
                 "avoid_reuse": false,
                 "descriptors": true,
-                "load_on_startup": true
+                "load_on_startup": true,
+                "external_signer": false
             }),
             None,
-            "Bitcoin Core stvara descriptor signing wallet i u njemu generira privatne ključeve.",
-            None,
+            "Bitcoin Core stvara descriptor signing wallet već šifriran zadanom lozinkom.",
+            Some(json!({
+                "wallet_name": wallet_name,
+                "disable_private_keys": false,
+                "blank": false,
+                "passphrase": "[REDACTED]",
+                "avoid_reuse": false,
+                "descriptors": true,
+                "load_on_startup": true,
+                "external_signer": false
+            })),
             false,
             &mut traces,
         )
         .await?;
-    let wallet = verify_signing_wallet(&client, &label, &wallet_name, &mut traces).await?;
-    Ok(Operation {
-        data: wallet,
-        rpc: traces,
-    })
-}
-
-pub async fn encrypt_signing_wallet(
-    client: RpcClient,
-    label: String,
-    wallet_name: String,
-    passphrase: String,
-) -> Result<Operation<SigningWallet>, String> {
-    validate_label(&label)?;
-    validate_wallet_name(&wallet_name)?;
-    if passphrase.chars().count() < 10 {
-        return Err("Wallet lozinka mora imati najmanje 10 znakova.".into());
-    }
-    let passphrase = Zeroizing::new(passphrase);
-    let mut traces = Vec::new();
-    ensure_signet(&client, &mut traces).await?;
-    verify_signing_wallet(&client, &label, &wallet_name, &mut traces).await?;
-    client
-        .call(
-            "encryptwallet",
-            json!({ "passphrase": passphrase.as_str() }),
-            Some(&wallet_name),
-            "Bitcoin Core enkriptira lokalni signing wallet. Lozinka se ne sprema u Core Vaultu.",
-            Some(json!({ "passphrase": "[REDACTED]" })),
-            false,
-            &mut traces,
-        )
-        .await?;
-
-    let wallet = verify_signing_wallet(&client, &label, &wallet_name, &mut traces).await?;
-    if !wallet.encrypted {
-        return Err("STOP: Bitcoin Core nije potvrdio da je signing wallet enkriptiran.".into());
-    }
+    let wallet = verify_new_signing_wallet(&client, &label, &wallet_name, &mut traces)
+        .await
+        .map_err(|reason| signer_postcondition_error(&label, &wallet_name, &reason))?;
     Ok(Operation {
         data: wallet,
         rpc: traces,
@@ -168,7 +146,12 @@ pub async fn build_multisig_vault(
 
     for (index, wallet_name) in wallet_names.iter().enumerate() {
         let label = format!("K{}", index + 1);
-        verify_signing_wallet(&client, &label, wallet_name, &mut traces).await?;
+        let signer = verify_signing_wallet(&client, &label, wallet_name, &mut traces).await?;
+        if !signer.encrypted || !signer.locked {
+            return Err(format!(
+                "STOP: {label} ({wallet_name}) nije potvrđeno šifriran i zaključan. Coordinator nije stvoren."
+            ));
+        }
         let descriptors = client
             .call(
                 "listdescriptors",
@@ -875,6 +858,56 @@ fn ensure_legacy_workflow_can_progress(draft: &SpendState) -> Result<(), String>
     Ok(())
 }
 
+async fn verify_new_signing_wallet(
+    client: &RpcClient,
+    label: &str,
+    wallet_name: &str,
+    traces: &mut Vec<RpcTrace>,
+) -> Result<SigningWallet, String> {
+    let mut wallet = verify_signing_wallet(client, label, wallet_name, traces).await?;
+    if !wallet.encrypted || !wallet.locked {
+        return Err("Bitcoin Core nije potvrdio da je signer wallet šifriran i zaključan.".into());
+    }
+    wallet.public_identity =
+        Some(read_signer_public_identity(client, label, wallet_name, traces).await?);
+    Ok(wallet)
+}
+
+async fn read_signer_public_identity(
+    client: &RpcClient,
+    label: &str,
+    wallet_name: &str,
+    traces: &mut Vec<RpcTrace>,
+) -> Result<SignerPublic, String> {
+    let descriptors = client
+        .call(
+            "listdescriptors",
+            json!({ "private": false }),
+            Some(wallet_name),
+            "Bitcoin Core vraća samo javni receive i change identitet novog signera.",
+            None,
+            false,
+            traces,
+        )
+        .await?;
+    let (receive, change) = extract_descriptor_pair(&descriptors)?;
+    validate_signer_descriptor_pair(label, &receive, &change)?;
+    Ok(SignerPublic {
+        label: label.into(),
+        wallet_name: wallet_name.into(),
+        fingerprint: receive.fingerprint,
+        derivation_path: receive.derivation_path,
+        tpub: receive.tpub,
+    })
+}
+
+fn signer_postcondition_error(label: &str, wallet_name: &str, reason: &str) -> String {
+    format!(
+        "PARTIAL CREATION: Bitcoin Core stvorio je signer {label} ({wallet_name}), ali Core Vault nije mogao potvrditi očekivano šifrirano i zaključano stanje s valjanim javnim identitetom. Multisig setup je zaustavljen; Core wallet nije obrisan. Razlog: {}",
+        sanitize_rpc_text(reason)
+    )
+}
+
 async fn verify_signing_wallet(
     client: &RpcClient,
     label: &str,
@@ -900,12 +933,21 @@ async fn verify_signing_wallet(
             "STOP: {wallet_name} nije descriptor signing wallet s uključenim privatnim ključevima."
         ));
     }
+    let encrypted = info.get("unlocked_until").is_some();
+    let locked = encrypted
+        && info
+            .get("unlocked_until")
+            .and_then(Value::as_i64)
+            .unwrap_or(0)
+            == 0;
     Ok(SigningWallet {
         label: label.into(),
         name: wallet_name.into(),
         descriptors,
         private_keys_enabled,
-        encrypted: info.get("unlocked_until").is_some(),
+        encrypted,
+        locked,
+        public_identity: None,
         backup_path: None,
     })
 }
@@ -1025,15 +1067,7 @@ fn validate_key_set(
     for index in 0..3 {
         let receive_key = &receive[index].2;
         let change_key = &change[index].2;
-        if receive_key.fingerprint != change_key.fingerprint
-            || receive_key.tpub != change_key.tpub
-            || receive_key.derivation_path != change_key.derivation_path
-        {
-            return Err(format!(
-                "STOP: {} receive i change javni podaci ne pripadaju istom signing walletu.",
-                receive[index].0
-            ));
-        }
+        validate_signer_descriptor_pair(&receive[index].0, receive_key, change_key)?;
     }
     for left in 0..3 {
         for right in (left + 1)..3 {
@@ -1052,6 +1086,22 @@ fn validate_key_set(
         .any(|(_, _, key)| &key.derivation_path != path)
     {
         return Err("STOP: signing walleti nemaju kompatibilnu derivation path strukturu.".into());
+    }
+    Ok(())
+}
+
+fn validate_signer_descriptor_pair(
+    label: &str,
+    receive: &DescriptorKey,
+    change: &DescriptorKey,
+) -> Result<(), String> {
+    if receive.fingerprint != change.fingerprint
+        || receive.tpub != change.tpub
+        || receive.derivation_path != change.derivation_path
+    {
+        return Err(format!(
+            "STOP: {label} receive i change javni podaci ne pripadaju istom signing walletu."
+        ));
     }
     Ok(())
 }
@@ -1166,6 +1216,16 @@ fn validate_label(label: &str) -> Result<(), String> {
     }
 }
 
+fn validate_signer_passphrase(value: &str) -> Result<(), String> {
+    if value.chars().count() < 10 {
+        return Err("Wallet lozinka mora imati najmanje 10 znakova.".into());
+    }
+    if value.chars().any(char::is_control) {
+        return Err("Wallet lozinka sadrži nedopušteni kontrolni znak.".into());
+    }
+    Ok(())
+}
+
 fn next_draft_id() -> String {
     format!(
         "draft-{}-{}",
@@ -1205,13 +1265,17 @@ mod tests {
         io::{BufRead, BufReader, Read, Write},
         net::TcpListener,
         path::PathBuf,
+        sync::{Arc, Mutex},
         thread,
     };
 
     struct MockRpcStep {
         method: &'static str,
         response: Result<Value, &'static str>,
+        atomic_signer_wallet: Option<&'static str>,
     }
+
+    const TEST_ONLY_SIGNER_PASSPHRASE: &str = "test-only-legacy-signer-passphrase-42";
 
     fn tpub(seed: char) -> String {
         format!("tpub{}", seed.to_string().repeat(107))
@@ -1300,6 +1364,323 @@ mod tests {
             "mine": { "trusted": 0.00005000, "untrusted_pending": 0.00000189 }
         });
         assert_eq!(btc_to_sats(wallet_balance_btc(&balances)), 5_189);
+    }
+
+    #[test]
+    fn atomic_signer_creation_passes_secret_once_and_returns_locked_public_identity() {
+        test_runtime().block_on(async {
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(
+                atomic_signer_creation_steps("CoreVault-K1", "a1b2c3d4", 'A'),
+            );
+
+            let operation = create_signing_wallet(
+                client,
+                "K1".into(),
+                "CoreVault-K1".into(),
+                TEST_ONLY_SIGNER_PASSPHRASE.into(),
+            )
+            .await
+            .expect("atomic signer creation should succeed");
+
+            finish_mock(server, cookie_path);
+            let methods = method_log.lock().expect("method log should lock").clone();
+            assert_eq!(
+                methods,
+                vec![
+                    "getblockchaininfo",
+                    "createwallet",
+                    "getwalletinfo",
+                    "listdescriptors"
+                ]
+            );
+            assert!(!methods.iter().any(|method| method == "encryptwallet"));
+            assert!(!methods.iter().any(|method| method == "walletpassphrase"));
+            assert!(operation.data.descriptors);
+            assert!(operation.data.private_keys_enabled);
+            assert!(operation.data.encrypted);
+            assert!(operation.data.locked);
+            let identity = operation
+                .data
+                .public_identity
+                .as_ref()
+                .expect("public signer identity should be returned");
+            assert_eq!(identity.label, "K1");
+            assert_eq!(identity.wallet_name, "CoreVault-K1");
+            assert_eq!(identity.fingerprint, "a1b2c3d4");
+            assert_eq!(identity.derivation_path, "/84h/1h/0h");
+            assert!(identity.tpub.starts_with("tpub"));
+            let serialized = serde_json::to_string(&operation)
+                .expect("creation operation should serialize for leak inspection");
+            assert!(!serialized.contains(TEST_ONLY_SIGNER_PASSPHRASE));
+            assert!(serialized.contains("[REDACTED]"));
+            assert!(!contains_private_material(&serialized));
+        });
+    }
+
+    #[test]
+    fn atomic_signer_createwallet_failure_stops_before_inspection() {
+        test_runtime().block_on(async {
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(vec![
+                signet_step(),
+                atomic_create_error("CoreVault-K1", "wallet creation refused"),
+            ]);
+
+            let error = create_signing_wallet(
+                client,
+                "K1".into(),
+                "CoreVault-K1".into(),
+                TEST_ONLY_SIGNER_PASSPHRASE.into(),
+            )
+            .await
+            .expect_err("createwallet error must not return a signer");
+
+            finish_mock(server, cookie_path);
+            assert!(error.contains("wallet creation refused"));
+            assert!(!error.contains("PARTIAL CREATION"));
+            assert_eq!(
+                method_log
+                    .lock()
+                    .expect("method log should lock")
+                    .as_slice(),
+                ["getblockchaininfo", "createwallet"]
+            );
+        });
+    }
+
+    #[test]
+    fn atomic_signer_postcondition_failure_reports_partial_creation_without_cleanup() {
+        test_runtime().block_on(async {
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(vec![
+                signet_step(),
+                atomic_create_ok("CoreVault-K1"),
+                rpc_ok(
+                    "getwalletinfo",
+                    json!({
+                        "descriptors": true,
+                        "private_keys_enabled": true
+                    }),
+                ),
+            ]);
+
+            let error = create_signing_wallet(
+                client,
+                "K1".into(),
+                "CoreVault-K1".into(),
+                TEST_ONLY_SIGNER_PASSPHRASE.into(),
+            )
+            .await
+            .expect_err("unencrypted postcondition must stop signer setup");
+
+            finish_mock(server, cookie_path);
+            assert!(error.starts_with("PARTIAL CREATION:"));
+            assert!(error.contains("CoreVault-K1"));
+            assert!(error.contains("Core wallet nije obrisan"));
+            let methods = method_log.lock().expect("method log should lock").clone();
+            assert_eq!(
+                methods,
+                vec!["getblockchaininfo", "createwallet", "getwalletinfo"]
+            );
+            for forbidden in [
+                "encryptwallet",
+                "listdescriptors",
+                "unloadwallet",
+                "createwallet-coordinator",
+            ] {
+                assert!(!methods.iter().any(|method| method == forbidden));
+            }
+        });
+    }
+
+    #[test]
+    fn atomic_signer_creation_rejects_private_descriptor_material() {
+        test_runtime().block_on(async {
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(vec![
+                signet_step(),
+                atomic_create_ok("CoreVault-K1"),
+                encrypted_wallet_step(),
+                rpc_ok(
+                    "listdescriptors",
+                    json!({
+                        "descriptors": [{
+                            "desc": "wpkh([a1b2c3d4/84h/1h/0h]tprvTestOnlyPrivateMaterial/0/*)#bad00000",
+                            "internal": false
+                        }]
+                    }),
+                ),
+            ]);
+
+            let error = create_signing_wallet(
+                client,
+                "K1".into(),
+                "CoreVault-K1".into(),
+                TEST_ONLY_SIGNER_PASSPHRASE.into(),
+            )
+            .await
+            .expect_err("private descriptor material must never produce a signer DTO");
+
+            finish_mock(server, cookie_path);
+            assert!(error.starts_with("PARTIAL CREATION:"));
+            assert!(error.contains("privatni key materijal"));
+            assert!(!error.contains("tprvTestOnlyPrivateMaterial"));
+            assert!(!method_log
+                .lock()
+                .expect("method log should lock")
+                .iter()
+                .any(|method| method == "encryptwallet"));
+        });
+    }
+
+    #[test]
+    fn all_three_legacy_signers_use_atomic_encrypted_creation() {
+        test_runtime().block_on(async {
+            let mut steps = Vec::new();
+            steps.extend(atomic_signer_creation_steps(
+                "CoreVault-K1",
+                "a1b2c3d1",
+                'A',
+            ));
+            steps.extend(atomic_signer_creation_steps(
+                "CoreVault-K2",
+                "a1b2c3d2",
+                'B',
+            ));
+            steps.extend(atomic_signer_creation_steps(
+                "CoreVault-K3",
+                "a1b2c3d3",
+                'C',
+            ));
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(steps);
+            let mut fingerprints = Vec::new();
+
+            for (label, wallet_name) in [
+                ("K1", "CoreVault-K1"),
+                ("K2", "CoreVault-K2"),
+                ("K3", "CoreVault-K3"),
+            ] {
+                let signer = create_signing_wallet(
+                    client.clone(),
+                    label.into(),
+                    wallet_name.into(),
+                    TEST_ONLY_SIGNER_PASSPHRASE.into(),
+                )
+                .await
+                .expect("each signer should use the atomic creation path");
+                assert!(signer.data.encrypted && signer.data.locked);
+                fingerprints.push(
+                    signer
+                        .data
+                        .public_identity
+                        .expect("each signer should expose public identity")
+                        .fingerprint,
+                );
+            }
+
+            finish_mock(server, cookie_path);
+            assert_eq!(fingerprints, ["a1b2c3d1", "a1b2c3d2", "a1b2c3d3"]);
+            let methods = method_log.lock().expect("method log should lock").clone();
+            assert_eq!(
+                methods
+                    .iter()
+                    .filter(|method| *method == "createwallet")
+                    .count(),
+                3
+            );
+            assert_eq!(
+                methods
+                    .iter()
+                    .filter(|method| *method == "listdescriptors")
+                    .count(),
+                3
+            );
+            assert!(!methods.iter().any(|method| method == "encryptwallet"));
+            assert!(!methods.iter().any(|method| method == "walletpassphrase"));
+        });
+    }
+
+    #[test]
+    fn partial_multisig_setup_preserves_prior_signer_and_does_not_roll_back() {
+        test_runtime().block_on(async {
+            let mut steps = atomic_signer_creation_steps("CoreVault-K1", "a1b2c3d1", 'A');
+            steps.extend([
+                signet_step(),
+                atomic_create_error("CoreVault-K2", "second signer creation refused"),
+            ]);
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(steps);
+
+            let first = create_signing_wallet(
+                client.clone(),
+                "K1".into(),
+                "CoreVault-K1".into(),
+                TEST_ONLY_SIGNER_PASSPHRASE.into(),
+            )
+            .await
+            .expect("first signer should remain a truthful successful result");
+            let second = create_signing_wallet(
+                client,
+                "K2".into(),
+                "CoreVault-K2".into(),
+                TEST_ONLY_SIGNER_PASSPHRASE.into(),
+            )
+            .await
+            .expect_err("second signer failure should stop only that creation attempt");
+
+            finish_mock(server, cookie_path);
+            assert_eq!(first.data.name, "CoreVault-K1");
+            assert!(first.data.encrypted && first.data.locked);
+            assert!(second.contains("second signer creation refused"));
+            let methods = method_log.lock().expect("method log should lock").clone();
+            assert_eq!(
+                methods
+                    .iter()
+                    .filter(|method| *method == "createwallet")
+                    .count(),
+                2
+            );
+            assert!(!methods.iter().any(|method| {
+                matches!(
+                    method.as_str(),
+                    "unloadwallet" | "encryptwallet" | "createwallet-coordinator"
+                )
+            }));
+        });
+    }
+
+    #[test]
+    fn coordinator_creation_rejects_an_unencrypted_signer_before_mutation() {
+        test_runtime().block_on(async {
+            let (client, server, cookie_path, method_log) = mock_rpc_client_with_log(vec![
+                signet_step(),
+                rpc_ok(
+                    "getwalletinfo",
+                    json!({
+                        "descriptors": true,
+                        "private_keys_enabled": true
+                    }),
+                ),
+            ]);
+
+            let error = build_multisig_vault(
+                client,
+                vec![
+                    "CoreVault-K1".into(),
+                    "CoreVault-K2".into(),
+                    "CoreVault-K3".into(),
+                ],
+                None,
+            )
+            .await
+            .expect_err("coordinator must not be created from an unencrypted signer");
+
+            finish_mock(server, cookie_path);
+            assert!(error.contains("Coordinator nije stvoren"));
+            assert_eq!(
+                method_log
+                    .lock()
+                    .expect("method log should lock")
+                    .as_slice(),
+                ["getblockchaininfo", "getwalletinfo"]
+            );
+        });
     }
 
     #[test]
@@ -1523,6 +1904,42 @@ mod tests {
         });
     }
 
+    fn atomic_signer_creation_steps(
+        wallet_name: &'static str,
+        fingerprint: &'static str,
+        seed: char,
+    ) -> Vec<MockRpcStep> {
+        vec![
+            signet_step(),
+            atomic_create_ok(wallet_name),
+            encrypted_wallet_step(),
+            rpc_ok(
+                "listdescriptors",
+                public_signer_descriptors(fingerprint, seed),
+            ),
+        ]
+    }
+
+    fn public_signer_descriptors(fingerprint: &str, seed: char) -> Value {
+        let public_key = tpub(seed);
+        json!({
+            "descriptors": [
+                {
+                    "desc": format!(
+                        "wpkh([{fingerprint}/84h/1h/0h]{public_key}/0/*)#receive1"
+                    ),
+                    "internal": false
+                },
+                {
+                    "desc": format!(
+                        "wpkh([{fingerprint}/84h/1h/0h]{public_key}/1/*)#change01"
+                    ),
+                    "internal": true
+                }
+            ]
+        })
+    }
+
     fn successful_signing_steps(relock: Result<(), &'static str>) -> Vec<MockRpcStep> {
         let mut steps = vec![
             signet_step(),
@@ -1573,6 +1990,7 @@ mod tests {
         MockRpcStep {
             method,
             response: Ok(result),
+            atomic_signer_wallet: None,
         }
     }
 
@@ -1580,6 +1998,23 @@ mod tests {
         MockRpcStep {
             method,
             response: Err(message),
+            atomic_signer_wallet: None,
+        }
+    }
+
+    fn atomic_create_ok(wallet_name: &'static str) -> MockRpcStep {
+        MockRpcStep {
+            method: "createwallet",
+            response: Ok(json!({ "name": wallet_name, "warnings": [] })),
+            atomic_signer_wallet: Some(wallet_name),
+        }
+    }
+
+    fn atomic_create_error(wallet_name: &'static str, message: &'static str) -> MockRpcStep {
+        MockRpcStep {
+            method: "createwallet",
+            response: Err(message),
+            atomic_signer_wallet: Some(wallet_name),
         }
     }
 
@@ -1643,6 +2078,18 @@ mod tests {
     }
 
     fn mock_rpc_client(steps: Vec<MockRpcStep>) -> (RpcClient, thread::JoinHandle<()>, PathBuf) {
+        let (client, server, cookie_path, _) = mock_rpc_client_with_log(steps);
+        (client, server, cookie_path)
+    }
+
+    fn mock_rpc_client_with_log(
+        steps: Vec<MockRpcStep>,
+    ) -> (
+        RpcClient,
+        thread::JoinHandle<()>,
+        PathBuf,
+        Arc<Mutex<Vec<String>>>,
+    ) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback mock RPC");
         let port = listener.local_addr().expect("mock address").port();
         let cookie_path = std::env::temp_dir().join(format!(
@@ -1650,6 +2097,8 @@ mod tests {
             std::process::id()
         ));
         fs::write(&cookie_path, "user:pass\n").expect("write mock cookie");
+        let method_log = Arc::new(Mutex::new(Vec::new()));
+        let server_method_log = Arc::clone(&method_log);
 
         let server = thread::spawn(move || {
             for step in steps {
@@ -1675,6 +2124,13 @@ mod tests {
                     Some(step.method),
                     "unexpected RPC sequence"
                 );
+                server_method_log
+                    .lock()
+                    .expect("method log should lock")
+                    .push(step.method.into());
+                if let Some(wallet_name) = step.atomic_signer_wallet {
+                    assert_atomic_signer_create_request(&request, wallet_name);
+                }
 
                 let (result, error) = match step.response {
                     Ok(result) => (result, Value::Null),
@@ -1698,7 +2154,39 @@ mod tests {
             cookie_path: cookie_path.to_string_lossy().into_owned(),
         })
         .expect("loopback client settings should be valid");
-        (client, server, cookie_path)
+        (client, server, cookie_path, method_log)
+    }
+
+    fn assert_atomic_signer_create_request(request: &Value, expected_wallet_name: &str) {
+        let params = request
+            .get("params")
+            .and_then(Value::as_object)
+            .expect("createwallet params should be an object");
+        assert_eq!(
+            params.get("wallet_name").and_then(Value::as_str),
+            Some(expected_wallet_name)
+        );
+        assert_eq!(
+            params
+                .get("passphrase")
+                .and_then(Value::as_str)
+                .map(|value| !value.is_empty()),
+            Some(true),
+            "atomic signer createwallet must receive a non-empty test passphrase"
+        );
+        assert_eq!(
+            params.get("disable_private_keys").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(params.get("blank").and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            params.get("descriptors").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            params.get("external_signer").and_then(Value::as_bool),
+            Some(false)
+        );
     }
 
     fn finish_mock(server: thread::JoinHandle<()>, cookie_path: PathBuf) {

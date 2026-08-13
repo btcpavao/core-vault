@@ -26,6 +26,8 @@ npx vitest run tests/passphrase-lifecycle.test.tsx
 
 Legacy 2-of-3 signer tests use a deterministic loopback JSON-RPC server to cover every signing/relock result pair, unlock failure, retry-lock success and failure, and direct backend attempts to bypass the stop through another signer or the combined finalization/broadcast command. A successful `walletlock` JSON-RPC response is the current practical authoritative lock confirmation; the retry action never unlocks or signs again. The relock-required workflow state is currently held only in memory, so restart-time wallet lock reconciliation remains future work.
 
+Atomic legacy-signer creation tests inspect the real loopback RPC request without printing its test-only secret. They require a non-empty passphrase in the initial `createwallet` request, verify encrypted/locked/private-key-enabled descriptor postconditions, preserve public receive/change identity extraction, reject private material, prove all three signer paths avoid `encryptwallet` and unnecessary unlocks, and preserve truthful partial-setup behavior. The explicit Regtest suite also creates one signer through the production domain function and checks the same state against real Bitcoin Core.
+
 ## Isolated Regtest golden recovery test
 
 The real Bitcoin Core integration test is explicit and is not started by `npm test` or `npm run verify`:

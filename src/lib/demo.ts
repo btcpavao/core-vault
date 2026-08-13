@@ -61,19 +61,23 @@ export const demoCoreStatus: Operation<CoreStatus> = {
   ],
 };
 
-export const demoSigner = (label: string, encrypted = false, backupPath?: string): Operation<SigningWallet> => ({
+export const demoSigner = (label: string, encrypted = true, backupPath?: string): Operation<SigningWallet> => ({
   data: {
     label,
     name: `CoreVault-${label}`,
     descriptors: true,
     privateKeysEnabled: true,
     encrypted,
+    locked: encrypted,
+    publicIdentity: fakeKey(label, Number(label.slice(1))),
     backupPath: backupPath ?? null,
   },
   rpc: [
-    trace(encrypted ? "encryptwallet" : "createwallet", `Bitcoin Core ${encrypted ? "enkriptira" : "stvara"} ${label}.`, {
+    trace(backupPath ? "backupwallet" : "createwallet", `Bitcoin Core ${backupPath ? "sigurno kopira" : "atomski stvara i šifrira"} ${label}.`, {
       descriptors: true,
       private_keys_enabled: true,
+      encrypted,
+      locked: encrypted,
     }),
   ],
 });

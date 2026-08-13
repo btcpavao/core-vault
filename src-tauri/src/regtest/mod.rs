@@ -6,13 +6,16 @@ mod tests {
     use crate::{
         file_capabilities::{issue_test_capability, FileOperation},
         personal,
+        security::contains_private_material,
         types::{AppState, MempoolPreflightView},
+        vault,
     };
     use serde_json::Value;
 
     const ORIGINAL_WALLET: &str = "golden_personal";
     const RESTORED_WALLET: &str = "golden_personal_recovered";
     const MINER_WALLET: &str = "golden_fixture_miner";
+    const LEGACY_SIGNER_WALLET: &str = "atomic_legacy_signer_k1";
     const FUNDED_SATS: u64 = 100_000_000;
     const SIGNING_PROOF_SATS: u64 = 10_000;
 
@@ -37,6 +40,81 @@ mod tests {
                 .await
                 .unwrap_or_else(|error| panic!("golden Regtest recovery failed: {error}"));
         });
+    }
+
+    #[test]
+    #[ignore = "requires an explicit real-bitcoind Regtest run"]
+    fn legacy_signer_is_created_atomically_encrypted() {
+        test_runtime().block_on(async {
+            run_atomic_legacy_signer_creation()
+                .await
+                .unwrap_or_else(|error| {
+                    panic!("atomic legacy signer Regtest proof failed: {error}")
+                });
+        });
+    }
+
+    async fn run_atomic_legacy_signer_creation() -> Result<(), String> {
+        let node = RegtestNode::start().await?;
+        let client = node.client();
+
+        node.assert_regtest().await?;
+        let created = vault::create_signing_wallet(
+            client,
+            "K1".into(),
+            LEGACY_SIGNER_WALLET.into(),
+            TEST_ONLY_PASSPHRASE.into(),
+        )
+        .await
+        .map_err(|error| stage("atomic encrypted legacy signer creation", error))?;
+
+        assert!(created.data.descriptors);
+        assert!(created.data.private_keys_enabled);
+        assert!(created.data.encrypted);
+        assert!(created.data.locked);
+        let identity =
+            created.data.public_identity.as_ref().ok_or_else(|| {
+                "legacy signer creation did not return public identity".to_string()
+            })?;
+        assert_eq!(identity.label, "K1");
+        assert_eq!(identity.wallet_name, LEGACY_SIGNER_WALLET);
+        assert_eq!(identity.fingerprint.len(), 8);
+        assert_eq!(identity.derivation_path, "/84h/1h/0h");
+        assert!(identity.tpub.starts_with("tpub"));
+
+        let wallet_info = node.wallet_info(LEGACY_SIGNER_WALLET).await?;
+        assert_wallet_is_encrypted_locked_descriptor(&wallet_info)?;
+
+        let serialized = serde_json::to_string(&created)
+            .map_err(|error| stage("legacy signer public result serialization", error))?;
+        assert!(!serialized.contains(TEST_ONLY_PASSPHRASE));
+        assert!(!contains_private_material(&serialized));
+        let methods = created
+            .rpc
+            .iter()
+            .map(|trace| trace.method.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            methods,
+            [
+                "getblockchaininfo",
+                "createwallet",
+                "getwalletinfo",
+                "listdescriptors"
+            ]
+        );
+        assert!(!methods.contains(&"encryptwallet"));
+        assert!(!methods.contains(&"walletpassphrase"));
+
+        let report = node.shutdown().await?;
+        assert!(report.graceful, "the owned bitcoind must stop through RPC");
+        if !report.preserved_for_debug {
+            assert!(
+                report.cleaned,
+                "the owned temporary datadir must be removed"
+            );
+        }
+        Ok(())
     }
 
     async fn run_golden_recovery() -> Result<(), String> {

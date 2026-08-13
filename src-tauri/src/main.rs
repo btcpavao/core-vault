@@ -278,18 +278,9 @@ async fn create_signing_wallet(
     state: State<'_, AppState>,
     label: String,
     wallet_name: String,
-) -> Result<Operation<SigningWallet>, String> {
-    vault::create_signing_wallet(client_from_state(&state)?, label, wallet_name).await
-}
-
-#[tauri::command]
-async fn encrypt_signing_wallet(
-    state: State<'_, AppState>,
-    label: String,
-    wallet_name: String,
     passphrase: String,
 ) -> Result<Operation<SigningWallet>, String> {
-    vault::encrypt_signing_wallet(client_from_state(&state)?, label, wallet_name, passphrase).await
+    vault::create_signing_wallet(client_from_state(&state)?, label, wallet_name, passphrase).await
 }
 
 #[tauri::command]
@@ -432,7 +423,6 @@ fn main() {
             preflight_personal_spend_proposal,
             broadcast_personal_spend_proposal,
             create_signing_wallet,
-            encrypt_signing_wallet,
             choose_signer_backup_destination,
             backup_signing_wallet,
             build_multisig_vault,

@@ -117,7 +117,6 @@ describe("prototype architecture invariants", () => {
     for (const command of [
       "connect_core",
       "create_signing_wallet",
-      "encrypt_signing_wallet",
       "backup_signing_wallet",
       "build_multisig_vault",
       "export_public_backup",
@@ -129,6 +128,7 @@ describe("prototype architecture invariants", () => {
     ]) {
       expect(main).toContain(command);
     }
+    expect(main).not.toContain("encrypt_signing_wallet");
   });
 
   it("binds sensitive file operations to native-dialog capabilities", () => {

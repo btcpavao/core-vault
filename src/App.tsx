@@ -186,27 +186,15 @@ function App() {
     }
   };
 
-  const handleCreateSigner = async (state: SignerState) => {
+  const handleCreateSigner = async (state: SignerState, passphrase: string) => {
     setBusy(`create-${state.label}`);
     setError(null);
     try {
       if (demoMode) await waitForDemo();
-      const wallet = append(demoMode ? demoSigner(state.label) : await coreApi.createSigner(state.label, state.name));
-      updateSigner(state.label, { ...state, wallet });
-    } catch (reason) {
-      setError(formatError(reason));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleEncryptSigner = async (state: SignerState, passphrase: string) => {
-    setBusy(`encrypt-${state.label}`);
-    setError(null);
-    try {
-      if (demoMode) await waitForDemo();
       const wallet = append(
-        demoMode ? demoSigner(state.label, true) : await coreApi.encryptSigner(state.label, state.name, passphrase),
+        demoMode
+          ? demoSigner(state.label, true)
+          : await coreApi.createSigner(state.label, state.name, passphrase),
       );
       updateSigner(state.label, { ...state, wallet });
     } catch (reason) {
@@ -427,8 +415,7 @@ function App() {
               position={signerIndex}
               busy={busy}
               onNameChange={(name) => updateSignerName(currentSigner.label, name)}
-              onCreate={() => handleCreateSigner(currentSigner)}
-              onEncrypt={(passphrase) => handleEncryptSigner(currentSigner, passphrase)}
+              onCreate={(passphrase) => handleCreateSigner(currentSigner, passphrase)}
               onContinue={() => {
                 if (signerIndex < 2) {
                   setSignerIndex((value) => value + 1);
@@ -611,21 +598,19 @@ function SignerStep({
   busy,
   onNameChange,
   onCreate,
-  onEncrypt,
   onContinue,
 }: {
   signer: SignerState;
   position: number;
   busy: string | null;
   onNameChange: (name: string) => void;
-  onCreate: () => void;
-  onEncrypt: (passphrase: string) => Promise<void>;
+  onCreate: (passphrase: string) => Promise<void>;
   onContinue: () => void;
 }) {
   const passphraseRef = useRef<HTMLInputElement>(null);
   const created = Boolean(signer.wallet);
-  const encrypted = Boolean(signer.wallet?.encrypted);
-  const handleEncrypt = async () => {
+  const ready = Boolean(signer.wallet?.encrypted && signer.wallet?.locked);
+  const handleCreate = async () => {
     const input = passphraseRef.current;
     if (!input || input.value.length < 10) {
       input?.setCustomValidity("Use at least 10 characters.");
@@ -635,36 +620,35 @@ function SignerStep({
     input.setCustomValidity("");
     const value = input.value;
     input.value = "";
-    await onEncrypt(value);
+    await onCreate(value);
   };
   return (
     <section className="step-screen">
-      <StepHeader eyebrow={`Step 2 · Signing wallets · ${position + 1} of 3`} title={encrypted ? `${signer.label} is ready` : created ? `Encrypt ${signer.label}` : `Create ${signer.label}`}>
-        <p>{created ? "Protect this signing wallet with a password known only to you." : "Bitcoin Core will create this key inside a separate local descriptor wallet."}</p>
+      <StepHeader eyebrow={`Step 2 · Signing wallets · ${position + 1} of 3`} title={ready ? `${signer.label} is ready` : `Create encrypted ${signer.label}`}>
+        <p>{ready ? "Bitcoin Core confirmed that this signer is encrypted and locked." : "Bitcoin Core will create this key encrypted from the first wallet operation."}</p>
       </StepHeader>
-      <article className={`signer-focus-card ${encrypted ? "is-ready" : ""}`}>
+      <article className={`signer-focus-card ${ready ? "is-ready" : ""}`}>
         <div className="signer-icon"><KeyRound /></div>
         <div className="signer-focus-content"><span>{signer.label}</span><h2>Signing wallet {position + 1}</h2><p>{created ? signer.name : "Holds one of the three keys"}</p></div>
-        {encrypted && <div className="ready-stamp"><Check size={17} />Ready</div>}
+        {ready && <div className="ready-stamp"><Check size={17} />Ready</div>}
       </article>
       <ul className="check-list">
         <CheckRow done={created}>Descriptor wallet created by Bitcoin Core</CheckRow>
-        <CheckRow done={encrypted}>Wallet encrypted</CheckRow>
+        <CheckRow done={ready}>Wallet created encrypted and confirmed locked</CheckRow>
         <CheckRow done={false}>Backup will be checked before the receive test</CheckRow>
       </ul>
       {!created && (
-        <label className="form-field"><span>Bitcoin Core wallet name</span><input value={signer.name} onChange={(event) => onNameChange(event.target.value)} autoComplete="off" /><small>Letters, numbers, dash, underscore and dot only.</small></label>
-      )}
-      {created && !encrypted && (
-        <div className="password-block">
-          <label className="form-field"><span>Wallet password</span><input ref={passphraseRef} type="password" minLength={10} autoComplete="new-password" /><small>The password is sent only to your local Bitcoin Core. Core Vault does not save it.</small></label>
-          <SecurityNotice title="Remember this password"><p>Losing the password may make this signing wallet unusable even if you still have its backup. Store them separately.</p></SecurityNotice>
-        </div>
+        <>
+          <label className="form-field"><span>Bitcoin Core wallet name</span><input value={signer.name} onChange={(event) => onNameChange(event.target.value)} autoComplete="off" /><small>Letters, numbers, dash, underscore and dot only.</small></label>
+          <div className="password-block">
+            <label className="form-field"><span>Wallet password</span><input ref={passphraseRef} type="password" minLength={10} autoComplete="new-password" /><small>The password is sent only to your local Bitcoin Core. Core Vault does not save it.</small></label>
+            <SecurityNotice title="Remember this password"><p>Losing the password may make this signing wallet unusable even if you still have its backup. Store them separately.</p></SecurityNotice>
+          </div>
+        </>
       )}
       <div className="step-actions">
-        {!created && <button className="button button-primary" onClick={onCreate} disabled={busy !== null}>{busy === `create-${signer.label}` ? "Creating in Bitcoin Core…" : "Create signing wallet"}</button>}
-        {created && !encrypted && <button className="button button-primary" onClick={() => void handleEncrypt()} disabled={busy !== null}>{busy === `encrypt-${signer.label}` ? "Encrypting in Bitcoin Core…" : `Encrypt ${signer.label}`}</button>}
-        {encrypted && <button className="button button-primary" onClick={onContinue}>{position < 2 ? `Continue to K${position + 2}` : "Review vault"}<ArrowRight size={18} /></button>}
+        {!created && <button className="button button-primary" onClick={() => void handleCreate()} disabled={busy !== null}>{busy === `create-${signer.label}` ? "Creating encrypted wallet in Bitcoin Core…" : "Create encrypted signing wallet"}</button>}
+        {ready && <button className="button button-primary" onClick={onContinue}>{position < 2 ? `Continue to K${position + 2}` : "Review vault"}<ArrowRight size={18} /></button>}
       </div>
     </section>
   );

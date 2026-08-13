@@ -172,6 +172,8 @@ export interface SigningWallet {
   descriptors: boolean;
   privateKeysEnabled: boolean;
   encrypted: boolean;
+  locked: boolean;
+  publicIdentity?: SignerPublic | null;
   backupPath?: string | null;
 }
 

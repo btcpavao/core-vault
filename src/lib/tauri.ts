@@ -90,10 +90,8 @@ export const coreApi = {
     invoke<Operation<PersonalSpendView>>("preflight_personal_spend_proposal", { draftId }),
   broadcastPersonalSpend: (draftId: string) =>
     invoke<Operation<PersonalBroadcast>>("broadcast_personal_spend_proposal", { draftId }),
-  createSigner: (label: string, walletName: string) =>
-    invoke<Operation<SigningWallet>>("create_signing_wallet", { label, walletName }),
-  encryptSigner: (label: string, walletName: string, passphrase: string) =>
-    invoke<Operation<SigningWallet>>("encrypt_signing_wallet", {
+  createSigner: (label: string, walletName: string, passphrase: string) =>
+    invoke<Operation<SigningWallet>>("create_signing_wallet", {
       label,
       walletName,
       passphrase,
