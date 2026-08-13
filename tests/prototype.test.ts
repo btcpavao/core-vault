@@ -155,6 +155,19 @@ describe("prototype architecture invariants", () => {
     expect(adapter).toContain("choose_public_backup_export_destination");
   });
 
+  it("requires an explicit typed mempool acceptance at the Rust broadcast boundary", () => {
+    const personal = projectFile("src-tauri/src/personal.rs");
+    const main = projectFile("src-tauri/src/main.rs");
+    const frontendTypes = projectFile("src/types.ts");
+
+    expect(main).toContain("preflight_personal_spend_proposal");
+    expect(personal).toContain("ensure_broadcast_preflight(&snapshot.mempool_preflight, &raw_hex)");
+    expect(personal).toMatch(/Some\(true\)[\s\S]*?MempoolPreflight::Accepted/);
+    expect(frontendTypes).toContain('{ state: "accepted" }');
+    expect(frontendTypes).toContain('{ state: "indeterminate"; reason: string }');
+    expect(frontendTypes).not.toMatch(/mempoolAllowed|mempoolRejectReason/);
+  });
+
   it("delegates descriptor construction and checksum validation to explicit Core calls", () => {
     const vault = projectFile("src-tauri/src/vault.rs");
     expect(vault).toContain('"listdescriptors"');

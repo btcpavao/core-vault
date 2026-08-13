@@ -423,9 +423,36 @@ export default function SpatialApp() {
   const finalizeSpend = () => {
     if (!spend) return;
     void run(async () => {
-      if (mode === "demo") setSpend({ ...spend, state: "ready-to-broadcast", mempoolAllowed: true });
-      else {
-        const operation = await coreApi.finalizePersonalSpend(spend.draftId);
+      setBroadcastConfirmed(false);
+      if (mode === "demo") {
+        setSpend({
+          ...spend,
+          state: "ready-to-broadcast",
+          mempoolPreflight: { state: "accepted" },
+        });
+      } else {
+        const finalized = await coreApi.finalizePersonalSpend(spend.draftId);
+        setSpend(finalized.data);
+        appendRpc(finalized.rpc);
+        const preflight = await coreApi.preflightPersonalSpend(spend.draftId);
+        setSpend(preflight.data);
+        appendRpc(preflight.rpc);
+      }
+    });
+  };
+
+  const retryPreflight = () => {
+    if (!spend) return;
+    void run(async () => {
+      setBroadcastConfirmed(false);
+      if (mode === "demo") {
+        setSpend({
+          ...spend,
+          state: "ready-to-broadcast",
+          mempoolPreflight: { state: "accepted" },
+        });
+      } else {
+        const operation = await coreApi.preflightPersonalSpend(spend.draftId);
         setSpend(operation.data);
         appendRpc(operation.rpc);
       }
@@ -433,7 +460,7 @@ export default function SpatialApp() {
   };
 
   const broadcastSpend = () => {
-    if (!spend || !broadcastConfirmed) return;
+    if (!spend || !broadcastConfirmed || spend.mempoolPreflight.state !== "accepted") return;
     void run(async () => {
       if (mode === "demo") setBroadcast({ ...demoBroadcast, walletName: spend.walletName, sentSats: spend.amountSats, feeSats: spend.feeSats });
       else {
@@ -659,7 +686,7 @@ export default function SpatialApp() {
                   <div className="split-fields"><Field label={tr("amountSats")}><input ref={amountRef} required type="number" min={1} step={1} defaultValue={25000} /></Field><Field label={tr("feeRate")}><input ref={feeRef} required type="number" min={0.1} step={0.1} defaultValue={2} /></Field></div>
                   <button className="primary-action" disabled={!selectedWallet || loading} type="submit"><Send size={17} /> {tr("createProposal")}</button>
                 </form>}
-                {spend && !broadcast && <SpendReview spend={spend} tr={tr} passphraseRef={signPassphraseRef} loading={loading} confirmed={broadcastConfirmed} setConfirmed={setBroadcastConfirmed} onSign={signSpend} onFinalize={finalizeSpend} onBroadcast={broadcastSpend} onCancel={() => { setSpend(null); setBroadcastConfirmed(false); }} core={core} />}
+                {spend && !broadcast && <SpendReview spend={spend} tr={tr} passphraseRef={signPassphraseRef} loading={loading} confirmed={broadcastConfirmed} setConfirmed={setBroadcastConfirmed} onSign={signSpend} onFinalize={finalizeSpend} onPreflight={retryPreflight} onBroadcast={broadcastSpend} onCancel={() => { setSpend(null); setBroadcastConfirmed(false); }} core={core} />}
                 {broadcast && <div className="broadcast-result"><ShieldCheck size={34} /><h3>Transaction broadcast</h3><code>{broadcast.txid}</code><p>{formatSats(broadcast.sentSats)} + {formatSats(broadcast.feeSats)} fee</p><button className="secondary-action" onClick={() => { setSpend(null); setBroadcast(null); setBroadcastConfirmed(false); }}>New proposal</button></div>}
             </ContextOverlay>}
           </WorldScene>
@@ -737,7 +764,7 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
   return <div className="metric"><small>{label}</small><strong>{value}</strong><span>{detail}</span></div>;
 }
 
-function SpendReview({ spend, tr, passphraseRef, loading, confirmed, setConfirmed, onSign, onFinalize, onBroadcast, onCancel, core }: {
+function SpendReview({ spend, tr, passphraseRef, loading, confirmed, setConfirmed, onSign, onFinalize, onPreflight, onBroadcast, onCancel, core }: {
   spend: PersonalSpendView;
   tr: (key: CopyKey) => string;
   passphraseRef: React.RefObject<HTMLInputElement>;
@@ -746,17 +773,25 @@ function SpendReview({ spend, tr, passphraseRef, loading, confirmed, setConfirme
   setConfirmed: (value: boolean) => void;
   onSign: () => void;
   onFinalize: () => void;
+  onPreflight: () => void;
   onBroadcast: () => void;
   onCancel: () => void;
   core: CoreStatus;
 }) {
-  const ready = spend.state === "ready-to-broadcast";
+  const ready = spend.state === "ready-to-broadcast" && spend.mempoolPreflight.state === "accepted";
+  const preflightBlocked = spend.state === "preflight-required";
+  const preflightMessage = spend.mempoolPreflight.state === "rejected"
+    ? `Bitcoin Core would not accept this transaction into its mempool${spend.mempoolPreflight.reason ? `: ${spend.mempoolPreflight.reason}` : "."}`
+    : spend.mempoolPreflight.state === "indeterminate"
+      ? "Core Vault could not verify that Bitcoin Core would accept this transaction. Broadcast is disabled until preflight succeeds."
+      : "Mempool preflight has not succeeded. Broadcast remains disabled.";
   return <div className="spend-review">
     <div className="review-header"><span className="step-number">1</span><span><small>{tr("review")}</small><strong>{formatSats(spend.amountSats)} to {shorten(spend.destination, 14)}</strong></span><StatusPill tone="quiet">{spend.network.toUpperCase()}</StatusPill></div>
     <dl className="review-ledger"><dt>Destination</dt><dd><code>{spend.destination}</code></dd><dt>Amount</dt><dd>{formatSats(spend.amountSats)}</dd><dt>Network fee</dt><dd>{formatSats(spend.feeSats)} · {spend.feeRateSatVb} sat/vB</dd><dt>Total debit</dt><dd><strong>{formatSats(spend.totalDebitSats)}</strong></dd><dt>Change outputs</dt><dd>{spend.outputs.filter((output) => output.isChange).length}</dd><dt>Replaceable</dt><dd>{spend.replaceable ? "Yes (RBF)" : "No"}</dd></dl>
     {spend.state === "awaiting-review" && <div className="sign-box"><span className="step-number">2</span><Field label={tr("passphrase")}><input ref={passphraseRef} type="password" autoComplete="current-password" /></Field><button className="primary-action" onClick={onSign} disabled={loading}>{tr("sign")}</button><small>Bitcoin Core unlocks only briefly; Core Vault calls walletlock immediately afterward, including on error.</small></div>}
     {spend.state === "threshold-reached" && <button className="primary-action" onClick={onFinalize} disabled={loading}><ShieldCheck size={17} /> {tr("finalize")}</button>}
-    {ready && <div className="broadcast-gate"><CircleAlert size={24} /><div><strong>{tr("broadcastWarning")}</strong><p>Mempool test: {spend.mempoolAllowed ? "accepted" : spend.mempoolRejectReason ?? "not accepted"}. Network: {spend.network.toUpperCase()}.</p><label className="check-row"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /> {tr("confirmBroadcast")}</label><button className="danger-action" onClick={onBroadcast} disabled={!confirmed || !core.networkActive || loading}>{tr("broadcast")}</button>{!core.networkActive && <small>Enable Bitcoin Core P2P networking in the Engine Room before broadcast.</small>}</div></div>}
+    {preflightBlocked && <div className="broadcast-gate"><CircleAlert size={24} /><div><strong>Mempool preflight required</strong><p>{preflightMessage}</p><button className="secondary-action" onClick={onPreflight} disabled={loading}>Retry mempool preflight</button></div></div>}
+    {ready && <div className="broadcast-gate"><CircleAlert size={24} /><div><strong>{tr("broadcastWarning")}</strong><p>Bitcoin Core explicitly accepted this transaction for its mempool. Network: {spend.network.toUpperCase()}.</p><label className="check-row"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /> {tr("confirmBroadcast")}</label><button className="danger-action" onClick={onBroadcast} disabled={!confirmed || !core.networkActive || loading || spend.mempoolPreflight.state !== "accepted"}>{tr("broadcast")}</button>{!core.networkActive && <small>Enable Bitcoin Core P2P networking in the Engine Room before broadcast.</small>}</div></div>}
     <button className="text-action" onClick={onCancel}>Discard this in-memory proposal</button>
   </div>;
 }

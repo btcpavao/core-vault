@@ -436,16 +436,18 @@ fn chain_label(chain: &str) -> &str {
     }
 }
 
+pub(crate) fn sanitize_rpc_text(value: &str) -> String {
+    value.replace('\n', " ").chars().take(400).collect()
+}
+
 fn rpc_error_message(value: &Value) -> String {
-    value
-        .get("message")
-        .and_then(Value::as_str)
-        .or_else(|| value.as_str())
-        .unwrap_or("nepoznata lokalna RPC pogreška")
-        .replace('\n', " ")
-        .chars()
-        .take(400)
-        .collect()
+    sanitize_rpc_text(
+        value
+            .get("message")
+            .and_then(Value::as_str)
+            .or_else(|| value.as_str())
+            .unwrap_or("nepoznata lokalna RPC pogreška"),
+    )
 }
 
 fn is_signet_info(value: &Value) -> bool {

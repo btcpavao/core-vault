@@ -1,6 +1,7 @@
 use crate::file_capabilities::FileCapabilityStore;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::{collections::HashMap, sync::Mutex};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -146,6 +147,55 @@ pub struct SpendOutputView {
     pub is_change: bool,
 }
 
+#[derive(Clone, Debug)]
+pub enum MempoolPreflight {
+    NotRun,
+    Accepted {
+        transaction_identity: String,
+    },
+    Rejected {
+        transaction_identity: String,
+        reason: Option<String>,
+    },
+    Indeterminate {
+        transaction_identity: String,
+        reason: String,
+    },
+}
+
+impl MempoolPreflight {
+    pub fn is_accepted_for(&self, transaction_identity: &str) -> bool {
+        matches!(
+            self,
+            Self::Accepted {
+                transaction_identity: accepted_identity
+            } if accepted_identity == transaction_identity
+        )
+    }
+
+    pub fn view(&self) -> MempoolPreflightView {
+        match self {
+            Self::NotRun => MempoolPreflightView::NotRun,
+            Self::Accepted { .. } => MempoolPreflightView::Accepted,
+            Self::Rejected { reason, .. } => MempoolPreflightView::Rejected {
+                reason: reason.clone(),
+            },
+            Self::Indeterminate { reason, .. } => MempoolPreflightView::Indeterminate {
+                reason: reason.clone(),
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "state", rename_all = "kebab-case")]
+pub enum MempoolPreflightView {
+    NotRun,
+    Accepted,
+    Rejected { reason: Option<String> },
+    Indeterminate { reason: String },
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonalSpendView {
@@ -161,8 +211,7 @@ pub struct PersonalSpendView {
     pub replaceable: bool,
     pub state: String,
     pub complete: bool,
-    pub mempool_allowed: Option<bool>,
-    pub mempool_reject_reason: Option<String>,
+    pub mempool_preflight: MempoolPreflightView,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -188,12 +237,17 @@ pub struct PersonalSpendState {
     pub psbt: String,
     pub complete: bool,
     pub raw_hex: Option<String>,
-    pub mempool_allowed: Option<bool>,
-    pub mempool_reject_reason: Option<String>,
+    pub mempool_preflight: MempoolPreflight,
 }
 
 impl PersonalSpendState {
     pub fn view(&self, draft_id: String) -> PersonalSpendView {
+        let accepted_for_current_transaction = self
+            .raw_hex
+            .as_deref()
+            .map(finalized_transaction_identity)
+            .map(|identity| self.mempool_preflight.is_accepted_for(&identity))
+            .unwrap_or(false);
         PersonalSpendView {
             draft_id,
             wallet_name: self.wallet_name.clone(),
@@ -205,8 +259,10 @@ impl PersonalSpendState {
             total_debit_sats: self.amount_sats.saturating_add(self.fee_sats),
             outputs: self.outputs.clone(),
             replaceable: self.replaceable,
-            state: if self.raw_hex.is_some() {
+            state: if accepted_for_current_transaction {
                 "ready-to-broadcast"
+            } else if self.raw_hex.is_some() {
+                "preflight-required"
             } else if self.complete {
                 "threshold-reached"
             } else {
@@ -214,10 +270,13 @@ impl PersonalSpendState {
             }
             .into(),
             complete: self.complete,
-            mempool_allowed: self.mempool_allowed,
-            mempool_reject_reason: self.mempool_reject_reason.clone(),
+            mempool_preflight: self.mempool_preflight.view(),
         }
     }
+}
+
+pub fn finalized_transaction_identity(raw_hex: &str) -> String {
+    format!("{:x}", Sha256::digest(raw_hex.as_bytes()))
 }
 
 #[derive(Clone, Debug, Serialize)]

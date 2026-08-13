@@ -1,13 +1,15 @@
 use crate::{
     file_capabilities::{consume_file_capability, FileOperation},
-    rpc::{ensure_test_chain, RpcClient},
+    rpc::{ensure_test_chain, sanitize_rpc_text, RpcClient},
     security::validate_wallet_name,
     types::{
-        ActivityItem, AppState, BackupReceipt, Operation, PersonalBroadcast, PersonalReceive,
-        PersonalSpendState, PersonalSpendView, PersonalVault, PersonalVaultSnapshot,
-        RestoreReceipt, RpcTrace, SpendOutputView, VaultListItem,
+        finalized_transaction_identity, ActivityItem, AppState, BackupReceipt, MempoolPreflight,
+        Operation, PersonalBroadcast, PersonalReceive, PersonalSpendState, PersonalSpendView,
+        PersonalVault, PersonalVaultSnapshot, RestoreReceipt, RpcTrace, SpendOutputView,
+        VaultListItem,
     },
 };
+use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::{
@@ -20,6 +22,17 @@ use std::{
 use zeroize::Zeroizing;
 
 static PERSONAL_DRAFT_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Deserialize)]
+struct TestMempoolAcceptResult {
+    txid: String,
+    wtxid: String,
+    #[serde(rename = "package-error")]
+    package_error: Option<String>,
+    allowed: Option<bool>,
+    #[serde(rename = "reject-reason")]
+    reject_reason: Option<String>,
+}
 
 pub async fn list_vaults(
     client: RpcClient,
@@ -573,8 +586,7 @@ pub async fn create_spend_proposal(
         psbt,
         complete: false,
         raw_hex: None,
-        mempool_allowed: None,
-        mempool_reject_reason: None,
+        mempool_preflight: MempoolPreflight::NotRun,
     };
     let view = spend.view(draft_id.clone());
     state
@@ -673,6 +685,8 @@ pub async fn sign_spend_proposal(
         .get("complete")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    draft.raw_hex = None;
+    draft.mempool_preflight = MempoolPreflight::NotRun;
     let view = draft.view(draft_id);
     Ok(Operation {
         data: view,
@@ -717,25 +731,6 @@ pub async fn finalize_spend_proposal(
         .filter(|value| !value.is_empty())
         .ok_or_else(|| "Bitcoin Core nije vratio finalni transaction hex.".to_string())?
         .to_string();
-    let tested = client
-        .call(
-            "testmempoolaccept",
-            json!({ "rawtxs": [raw_hex] }),
-            None,
-            "Lokalni Core provjerava mempool pravila bez slanja transakcije.",
-            Some(json!({ "rawtxs": ["[REDACTED]"] })),
-            true,
-            &mut traces,
-        )
-        .await?;
-    let first = tested.as_array().and_then(|values| values.first());
-    let allowed = first
-        .and_then(|value| value.get("allowed"))
-        .and_then(Value::as_bool);
-    let reject_reason = first
-        .and_then(|value| value.get("reject-reason"))
-        .and_then(Value::as_str)
-        .map(str::to_string);
     let mut drafts = state
         .personal_drafts
         .lock()
@@ -743,9 +738,80 @@ pub async fn finalize_spend_proposal(
     let draft = drafts
         .get_mut(&draft_id)
         .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+    if draft.psbt != snapshot.psbt {
+        return Err(
+            "Spend proposal promijenjen je tijekom finalizacije. Ponovno ga pregledajte.".into(),
+        );
+    }
     draft.raw_hex = Some(raw_hex);
-    draft.mempool_allowed = allowed;
-    draft.mempool_reject_reason = reject_reason;
+    draft.mempool_preflight = MempoolPreflight::NotRun;
+    let view = draft.view(draft_id);
+    Ok(Operation {
+        data: view,
+        rpc: traces,
+    })
+}
+
+pub async fn preflight_spend_proposal(
+    client: RpcClient,
+    state: &AppState,
+    draft_id: String,
+) -> Result<Operation<PersonalSpendView>, String> {
+    let snapshot = state
+        .personal_drafts
+        .lock()
+        .map_err(|_| "PSBT state nije dostupan.".to_string())?
+        .get(&draft_id)
+        .cloned()
+        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+    let raw_hex = snapshot
+        .raw_hex
+        .clone()
+        .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
+    let transaction_identity = finalized_transaction_identity(&raw_hex);
+    let mut traces = Vec::new();
+
+    let preflight = match ensure_test_chain(&client, &mut traces).await {
+        Ok(_) => match client
+            .call(
+                "testmempoolaccept",
+                json!({ "rawtxs": [raw_hex] }),
+                None,
+                "Lokalni Core provjerava mempool pravila bez slanja transakcije.",
+                Some(json!({ "rawtxs": ["[REDACTED]"] })),
+                true,
+                &mut traces,
+            )
+            .await
+        {
+            Ok(tested) => parse_mempool_preflight(tested, transaction_identity.clone()),
+            Err(_) => MempoolPreflight::Indeterminate {
+                transaction_identity: transaction_identity.clone(),
+                reason: "Core Vault nije mogao dobiti pouzdan testmempoolaccept rezultat. Pokušajte ponovno."
+                    .into(),
+            },
+        },
+        Err(_) => MempoolPreflight::Indeterminate {
+            transaction_identity: transaction_identity.clone(),
+            reason: "Core Vault nije mogao potvrditi mrežu lokalnog Bitcoin Corea za mempool provjeru."
+                .into(),
+        },
+    };
+
+    let mut drafts = state
+        .personal_drafts
+        .lock()
+        .map_err(|_| "PSBT state nije dostupan.".to_string())?;
+    let draft = drafts
+        .get_mut(&draft_id)
+        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+    if draft.raw_hex.as_deref() != Some(raw_hex.as_str()) {
+        return Err(
+            "Finalizirana transakcija promijenjena je tijekom mempool provjere. Pokrenite provjeru ponovno."
+                .into(),
+        );
+    }
+    draft.mempool_preflight = preflight;
     let view = draft.view(draft_id);
     Ok(Operation {
         data: view,
@@ -769,15 +835,7 @@ pub async fn broadcast_spend_proposal(
         .raw_hex
         .clone()
         .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
-    if snapshot.mempool_allowed == Some(false) {
-        return Err(format!(
-            "Lokalni Core ne bi prihvatio transakciju: {}",
-            snapshot
-                .mempool_reject_reason
-                .clone()
-                .unwrap_or_else(|| "nepoznat razlog".into())
-        ));
-    }
+    ensure_broadcast_preflight(&snapshot.mempool_preflight, &raw_hex)?;
     let mut traces = Vec::new();
     ensure_test_chain(&client, &mut traces).await?;
     let network = client
@@ -1005,6 +1063,93 @@ fn parse_outputs(decoded: &Value, change_position: i64) -> Vec<SpendOutputView> 
         .collect()
 }
 
+fn parse_mempool_preflight(value: Value, transaction_identity: String) -> MempoolPreflight {
+    let mut results = match serde_json::from_value::<Vec<TestMempoolAcceptResult>>(value) {
+        Ok(results) => results,
+        Err(_) => {
+            return MempoolPreflight::Indeterminate {
+                transaction_identity,
+                reason: "Bitcoin Core vratio je neočekivan testmempoolaccept odgovor.".into(),
+            }
+        }
+    };
+    if results.len() != 1 {
+        return MempoolPreflight::Indeterminate {
+            transaction_identity,
+            reason: "Bitcoin Core nije vratio točno jedan rezultat za testiranu transakciju."
+                .into(),
+        };
+    }
+
+    let result = results.remove(0);
+    if !is_txid(&result.txid) || !is_txid(&result.wtxid) {
+        return MempoolPreflight::Indeterminate {
+            transaction_identity,
+            reason: "Bitcoin Core nije vratio valjani identitet testirane transakcije.".into(),
+        };
+    }
+
+    if result.package_error.is_some() {
+        return MempoolPreflight::Indeterminate {
+            transaction_identity,
+            reason: "Bitcoin Core vratio je neočekivanu package pogrešku za jednu transakciju."
+                .into(),
+        };
+    }
+
+    match result.allowed {
+        Some(true) if result.reject_reason.is_none() => MempoolPreflight::Accepted {
+            transaction_identity,
+        },
+        Some(true) => MempoolPreflight::Indeterminate {
+            transaction_identity,
+            reason: "Bitcoin Core vratio je kontradiktoran testmempoolaccept rezultat.".into(),
+        },
+        Some(false) => MempoolPreflight::Rejected {
+            transaction_identity,
+            reason: result
+                .reject_reason
+                .map(|reason| sanitize_rpc_text(&reason))
+                .filter(|reason| !reason.trim().is_empty()),
+        },
+        None => MempoolPreflight::Indeterminate {
+            transaction_identity,
+            reason: "Bitcoin Core nije izričito vratio allowed status za testiranu transakciju."
+                .into(),
+        },
+    }
+}
+
+fn ensure_broadcast_preflight(preflight: &MempoolPreflight, raw_hex: &str) -> Result<(), String> {
+    let current_identity = finalized_transaction_identity(raw_hex);
+    match preflight {
+        MempoolPreflight::Accepted {
+            transaction_identity,
+        } if transaction_identity == &current_identity => Ok(()),
+        MempoolPreflight::Rejected {
+            transaction_identity,
+            reason,
+        } if transaction_identity == &current_identity => Err(format!(
+            "Bitcoin Core ne bi prihvatio ovu transakciju u mempool: {}",
+            reason.clone().unwrap_or_else(|| "razlog nije naveden".into())
+        )),
+        MempoolPreflight::Indeterminate {
+            transaction_identity,
+            reason,
+        } if transaction_identity == &current_identity => Err(format!(
+            "Core Vault nije mogao potvrditi prihvat transakcije u mempool. Broadcast je onemogućen: {reason}"
+        )),
+        MempoolPreflight::NotRun => Err(
+            "Mempool provjera nije izvršena. Broadcast je onemogućen dok provjera izričito ne uspije."
+                .into(),
+        ),
+        _ => Err(
+            "Mempool provjera ne pripada trenutačno finaliziranoj transakciji. Pokrenite provjeru ponovno."
+                .into(),
+        ),
+    }
+}
+
 fn validate_display_name(value: &str) -> Result<(), String> {
     let trimmed = value.trim();
     if trimmed.is_empty() || trimmed.chars().count() > 64 || trimmed.chars().any(char::is_control) {
@@ -1095,6 +1240,9 @@ fn is_txid(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::ConnectionSettings;
+
+    const TEST_RAW_HEX: &str = "02000000000100";
 
     #[test]
     fn passphrase_policy_rejects_short_or_controlled_values() {
@@ -1133,5 +1281,238 @@ mod tests {
         assert!(validate_amount_and_fee(5_000, 0.0).is_err());
         assert!(is_txid(&"a".repeat(64)));
         assert!(!is_txid("not-a-txid"));
+    }
+
+    #[test]
+    fn explicit_true_is_required_for_accepted_preflight() {
+        let preflight = parse_mempool_preflight(
+            mempool_result(json!(true)),
+            finalized_transaction_identity(TEST_RAW_HEX),
+        );
+        assert!(matches!(preflight, MempoolPreflight::Accepted { .. }));
+        assert!(ensure_broadcast_preflight(&preflight, TEST_RAW_HEX).is_ok());
+        assert!(ensure_broadcast_preflight(&preflight, "different-finalized-hex").is_err());
+    }
+
+    #[test]
+    fn explicit_false_is_rejected_and_reason_is_sanitized() {
+        let preflight = parse_mempool_preflight(
+            json!([{
+                "txid": "a".repeat(64),
+                "wtxid": "b".repeat(64),
+                "allowed": false,
+                "reject-reason": "policy\nrejection"
+            }]),
+            finalized_transaction_identity(TEST_RAW_HEX),
+        );
+        match preflight {
+            MempoolPreflight::Rejected { reason, .. } => {
+                assert_eq!(reason.as_deref(), Some("policy rejection"));
+            }
+            other => panic!("explicit false must be Rejected, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn missing_null_and_wrong_type_allowed_are_indeterminate() {
+        for response in [
+            json!([{
+                "txid": "a".repeat(64),
+                "wtxid": "b".repeat(64)
+            }]),
+            json!([{
+                "txid": "a".repeat(64),
+                "wtxid": "b".repeat(64),
+                "allowed": null
+            }]),
+            json!([{
+                "txid": "a".repeat(64),
+                "wtxid": "b".repeat(64),
+                "allowed": "true"
+            }]),
+        ] {
+            assert!(matches!(
+                parse_mempool_preflight(response, finalized_transaction_identity(TEST_RAW_HEX)),
+                MempoolPreflight::Indeterminate { .. }
+            ));
+        }
+    }
+
+    #[test]
+    fn empty_malformed_and_unexpected_result_counts_are_indeterminate() {
+        for response in [
+            json!([]),
+            json!({ "allowed": true }),
+            json!([
+                {
+                    "txid": "a".repeat(64),
+                    "wtxid": "b".repeat(64),
+                    "allowed": true
+                },
+                {
+                    "txid": "c".repeat(64),
+                    "wtxid": "d".repeat(64),
+                    "allowed": true
+                }
+            ]),
+            json!([{
+                "txid": "a".repeat(64),
+                "wtxid": "b".repeat(64),
+                "allowed": true,
+                "reject-reason": "contradictory"
+            }]),
+            json!([{
+                "txid": "a".repeat(64),
+                "wtxid": "b".repeat(64),
+                "package-error": "unexpected single transaction package state",
+                "allowed": true
+            }]),
+        ] {
+            assert!(matches!(
+                parse_mempool_preflight(response, finalized_transaction_identity(TEST_RAW_HEX)),
+                MempoolPreflight::Indeterminate { .. }
+            ));
+        }
+    }
+
+    #[test]
+    fn broadcast_rejects_no_preflight() {
+        assert_broadcast_is_blocked(MempoolPreflight::NotRun, "Mempool provjera nije izvršena");
+    }
+
+    #[test]
+    fn broadcast_rejects_rejected_preflight() {
+        assert_broadcast_is_blocked(
+            MempoolPreflight::Rejected {
+                transaction_identity: finalized_transaction_identity(TEST_RAW_HEX),
+                reason: Some("policy rejection".into()),
+            },
+            "ne bi prihvatio",
+        );
+    }
+
+    #[test]
+    fn broadcast_rejects_indeterminate_preflight() {
+        assert_broadcast_is_blocked(
+            MempoolPreflight::Indeterminate {
+                transaction_identity: finalized_transaction_identity(TEST_RAW_HEX),
+                reason: "nepouzdan rezultat".into(),
+            },
+            "nije mogao potvrditi",
+        );
+    }
+
+    #[test]
+    fn accepted_preflight_permits_broadcast_command_to_reach_core_boundary() {
+        let error = run_broadcast_with_preflight(MempoolPreflight::Accepted {
+            transaction_identity: finalized_transaction_identity(TEST_RAW_HEX),
+        });
+        assert!(
+            error.contains("cookie nije moguće pročitati"),
+            "accepted preflight should pass the gate and reach the Core boundary: {error}"
+        );
+    }
+
+    #[test]
+    fn rpc_failure_preserves_finalized_transaction_as_indeterminate() {
+        let state = AppState::default();
+        state
+            .personal_drafts
+            .lock()
+            .expect("test draft state should lock")
+            .insert(
+                "preflight-rpc-failure".into(),
+                test_spend_state(MempoolPreflight::NotRun),
+            );
+        let operation = test_runtime()
+            .block_on(preflight_spend_proposal(
+                unreachable_rpc_client(),
+                &state,
+                "preflight-rpc-failure".into(),
+            ))
+            .expect("RPC failure should normalize into an indeterminate view");
+
+        assert!(matches!(
+            operation.data.mempool_preflight,
+            crate::types::MempoolPreflightView::Indeterminate { .. }
+        ));
+        let drafts = state
+            .personal_drafts
+            .lock()
+            .expect("test draft state should lock");
+        let draft = drafts
+            .get("preflight-rpc-failure")
+            .expect("finalized draft should remain available");
+        assert_eq!(draft.raw_hex.as_deref(), Some(TEST_RAW_HEX));
+        assert!(matches!(
+            draft.mempool_preflight,
+            MempoolPreflight::Indeterminate { .. }
+        ));
+    }
+
+    fn mempool_result(allowed: Value) -> Value {
+        json!([{
+            "txid": "a".repeat(64),
+            "wtxid": "b".repeat(64),
+            "allowed": allowed
+        }])
+    }
+
+    fn assert_broadcast_is_blocked(preflight: MempoolPreflight, expected: &str) {
+        let error = run_broadcast_with_preflight(preflight);
+        assert!(
+            error.contains(expected),
+            "unexpected broadcast error: {error}"
+        );
+    }
+
+    fn run_broadcast_with_preflight(preflight: MempoolPreflight) -> String {
+        let state = AppState::default();
+        state
+            .personal_drafts
+            .lock()
+            .expect("test draft state should lock")
+            .insert("gate-test".into(), test_spend_state(preflight));
+        let client = unreachable_rpc_client();
+        test_runtime()
+            .block_on(broadcast_spend_proposal(client, &state, "gate-test".into()))
+            .expect_err("test broadcast should stop before sendrawtransaction")
+    }
+
+    fn unreachable_rpc_client() -> RpcClient {
+        RpcClient::new(ConnectionSettings {
+            host: "127.0.0.1".into(),
+            port: 18443,
+            cookie_path: std::env::temp_dir()
+                .join("core-vault-intentionally-missing-cookie")
+                .to_string_lossy()
+                .into_owned(),
+        })
+        .expect("test RPC client should initialize")
+    }
+
+    fn test_spend_state(mempool_preflight: MempoolPreflight) -> PersonalSpendState {
+        PersonalSpendState {
+            wallet_name: "gate-test-wallet".into(),
+            network: "regtest".into(),
+            destination: "bcrt1qtest".into(),
+            amount_sats: 1_000,
+            fee_sats: 100,
+            fee_rate_sat_vb: 2.0,
+            outputs: Vec::new(),
+            replaceable: true,
+            psbt: "test-psbt".into(),
+            complete: true,
+            raw_hex: Some(TEST_RAW_HEX.into()),
+            mempool_preflight,
+        }
+    }
+
+    fn test_runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("build async test runtime")
     }
 }

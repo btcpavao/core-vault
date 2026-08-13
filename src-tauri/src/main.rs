@@ -258,6 +258,14 @@ async fn finalize_personal_spend_proposal(
 }
 
 #[tauri::command]
+async fn preflight_personal_spend_proposal(
+    state: State<'_, AppState>,
+    draft_id: String,
+) -> Result<Operation<PersonalSpendView>, String> {
+    personal::preflight_spend_proposal(client_from_state(&state)?, &state, draft_id).await
+}
+
+#[tauri::command]
 async fn broadcast_personal_spend_proposal(
     state: State<'_, AppState>,
     draft_id: String,
@@ -413,6 +421,7 @@ fn main() {
             create_personal_spend_proposal,
             sign_personal_spend_proposal,
             finalize_personal_spend_proposal,
+            preflight_personal_spend_proposal,
             broadcast_personal_spend_proposal,
             create_signing_wallet,
             encrypt_signing_wallet,

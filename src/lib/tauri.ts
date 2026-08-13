@@ -86,6 +86,8 @@ export const coreApi = {
     }),
   finalizePersonalSpend: (draftId: string) =>
     invoke<Operation<PersonalSpendView>>("finalize_personal_spend_proposal", { draftId }),
+  preflightPersonalSpend: (draftId: string) =>
+    invoke<Operation<PersonalSpendView>>("preflight_personal_spend_proposal", { draftId }),
   broadcastPersonalSpend: (draftId: string) =>
     invoke<Operation<PersonalBroadcast>>("broadcast_personal_spend_proposal", { draftId }),
   createSigner: (label: string, walletName: string) =>

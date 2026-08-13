@@ -16,6 +16,8 @@ Rust RPC tests bind a temporary loopback port. A restrictive sandbox may require
 
 File-capability unit tests cover valid one-time use, replay rejection, operation mismatch, unknown and expired identifiers, fresh application state, replacement by a newer same-purpose selection, and rejection of existing write destinations. Source-level IPC regression tests also require sensitive commands to accept capability IDs instead of renderer-supplied paths.
 
+Personal Vault mempool-preflight tests require exactly one structurally valid `testmempoolaccept` result with explicit `allowed: true`. Missing, null, malformed, rejected, empty, or ambiguous responses remain non-broadcastable. The Rust broadcast boundary also tests no-preflight, rejected, indeterminate, exact-finalized-transaction identity, and accepted progression states.
+
 ## Isolated Regtest golden recovery test
 
 The real Bitcoin Core integration test is explicit and is not started by `npm test` or `npm run verify`:
@@ -30,7 +32,7 @@ The command discovers `bitcoind` through `PATH`. To use a specific executable, p
 BITCOIND=/absolute/path/to/bitcoind npm run test:regtest
 ```
 
-The harness creates a unique `core-vault-regtest-*` directory under the operating system's temporary directory, starts only Regtest on a collision-resistant loopback RPC port, authenticates with that node's cookie, and refuses wallet mutations unless Core reports `chain == "regtest"`. It never accepts an existing datadir. The owned process is shut down and only the marked temporary directory is removed after the test.
+The harness creates a unique `core-vault-regtest-*` directory under the operating system's temporary directory, starts only Regtest on a collision-resistant loopback RPC port, authenticates with that node's cookie, and refuses wallet mutations unless Core reports `chain == "regtest"`. It never accepts an existing datadir. The recovery flow also finalizes the restored wallet's signing proof and requires a typed Accepted preflight from real Bitcoin Core without broadcasting it. The owned process is shut down and only the marked temporary directory is removed after the test.
 
 For a failing local test that needs inspection, temporary state can be retained explicitly:
 

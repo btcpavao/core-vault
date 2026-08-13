@@ -98,8 +98,7 @@ export const demoSpend = (destination = demoReceive.address, amountSats = 25_000
   replaceable: true,
   state: "awaiting-review",
   complete: false,
-  mempoolAllowed: null,
-  mempoolRejectReason: null,
+  mempoolPreflight: { state: "not-run" },
 });
 
 export const demoBroadcast: PersonalBroadcast = {

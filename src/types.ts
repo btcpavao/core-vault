@@ -136,6 +136,12 @@ export interface SpendOutputView {
   isChange: boolean;
 }
 
+export type MempoolPreflight =
+  | { state: "not-run" }
+  | { state: "accepted" }
+  | { state: "rejected"; reason: string | null }
+  | { state: "indeterminate"; reason: string };
+
 export interface PersonalSpendView {
   draftId: string;
   walletName: string;
@@ -149,8 +155,7 @@ export interface PersonalSpendView {
   replaceable: boolean;
   state: string;
   complete: boolean;
-  mempoolAllowed?: boolean | null;
-  mempoolRejectReason?: string | null;
+  mempoolPreflight: MempoolPreflight;
 }
 
 export interface PersonalBroadcast {

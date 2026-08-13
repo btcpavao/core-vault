@@ -6,7 +6,7 @@ mod tests {
     use crate::{
         file_capabilities::{issue_test_capability, FileOperation},
         personal,
-        types::AppState,
+        types::{AppState, MempoolPreflightView},
     };
     use serde_json::Value;
 
@@ -197,6 +197,34 @@ mod tests {
             signed.data.complete,
             "single-signature PSBT must be complete"
         );
+
+        node.assert_regtest().await?;
+        let finalized = personal::finalize_spend_proposal(
+            client.clone(),
+            &state,
+            proposal.data.draft_id.clone(),
+        )
+        .await
+        .map_err(|error| stage("restored spend finalization", error))?;
+        assert!(matches!(
+            finalized.data.mempool_preflight,
+            MempoolPreflightView::NotRun
+        ));
+        assert_eq!(finalized.data.state, "preflight-required");
+
+        node.assert_regtest().await?;
+        let preflight = personal::preflight_spend_proposal(
+            client.clone(),
+            &state,
+            proposal.data.draft_id.clone(),
+        )
+        .await
+        .map_err(|error| stage("real Core mempool preflight", error))?;
+        assert!(matches!(
+            preflight.data.mempool_preflight,
+            MempoolPreflightView::Accepted
+        ));
+        assert_eq!(preflight.data.state, "ready-to-broadcast");
 
         let restored_after_sign =
             personal::get_personal_vault(client.clone(), &state, RESTORED_WALLET.into())
