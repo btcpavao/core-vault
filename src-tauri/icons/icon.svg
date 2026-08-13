@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Core Vault shield">
+  <rect width="512" height="512" rx="112" fill="#c65d19"/>
+  <path d="M256 101c47 35 91 50 132 54v91c0 81-49 140-132 170-83-30-132-89-132-170v-91c41-4 85-19 132-54Z" fill="none" stroke="#fffefa" stroke-width="34" stroke-linejoin="round"/>
+  <path d="m190 258 43 43 91-96" fill="none" stroke="#fffefa" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
