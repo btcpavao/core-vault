@@ -130,6 +130,31 @@ describe("prototype architecture invariants", () => {
     }
   });
 
+  it("binds sensitive file operations to native-dialog capabilities", () => {
+    const main = projectFile("src-tauri/src/main.rs");
+    const adapter = projectFile("src/lib/tauri.ts");
+
+    expect(main).toMatch(
+      /async fn backup_personal_vault\([\s\S]*?capability_id: String,[\s\S]*?Result<Operation<BackupReceipt>/,
+    );
+    expect(main).toMatch(
+      /async fn restore_personal_vault\([\s\S]*?capability_id: String,[\s\S]*?Result<Operation<RestoreReceipt>/,
+    );
+    expect(main).toMatch(
+      /fn export_public_backup\([\s\S]*?capability_id: String,[\s\S]*?Result<String, String>/,
+    );
+    expect(main).not.toMatch(
+      /async fn backup_personal_vault\([\s\S]*?destination: String,[\s\S]*?Result<Operation<BackupReceipt>/,
+    );
+    expect(main).not.toMatch(
+      /async fn restore_personal_vault\([\s\S]*?backup_file: String,[\s\S]*?Result<Operation<RestoreReceipt>/,
+    );
+    expect(adapter).not.toContain("@tauri-apps/api/dialog");
+    expect(adapter).toContain("choose_personal_backup_destination");
+    expect(adapter).toContain("choose_personal_restore_source");
+    expect(adapter).toContain("choose_public_backup_export_destination");
+  });
+
   it("delegates descriptor construction and checksum validation to explicit Core calls", () => {
     const vault = projectFile("src-tauri/src/vault.rs");
     expect(vault).toContain('"listdescriptors"');

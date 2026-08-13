@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod file_capabilities;
 mod personal;
 #[cfg(test)]
 mod regtest;
@@ -8,6 +9,7 @@ mod security;
 mod types;
 mod vault;
 
+use file_capabilities::FileCapabilityGrant;
 use rpc::{autodetect_settings, inspect_core, offline_status, set_network_active, RpcClient};
 use tauri::State;
 use types::{
@@ -143,10 +145,15 @@ async fn get_personal_vault(
 async fn backup_personal_vault(
     state: State<'_, AppState>,
     wallet_name: String,
-    destination: String,
+    capability_id: String,
 ) -> Result<Operation<BackupReceipt>, String> {
-    personal::backup_personal_vault(client_from_state(&state)?, &state, wallet_name, destination)
-        .await
+    personal::backup_personal_vault(
+        client_from_state(&state)?,
+        &state,
+        wallet_name,
+        capability_id,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -154,15 +161,31 @@ async fn restore_personal_vault(
     state: State<'_, AppState>,
     original_wallet_name: String,
     restored_wallet_name: String,
-    backup_file: String,
+    capability_id: String,
 ) -> Result<Operation<RestoreReceipt>, String> {
     personal::restore_personal_vault(
         client_from_state(&state)?,
+        &state,
         original_wallet_name,
         restored_wallet_name,
-        backup_file,
+        capability_id,
     )
     .await
+}
+
+#[tauri::command]
+async fn choose_personal_backup_destination(
+    state: State<'_, AppState>,
+    wallet_name: String,
+) -> Result<Option<FileCapabilityGrant>, String> {
+    file_capabilities::choose_personal_backup_destination(&state, &wallet_name)
+}
+
+#[tauri::command]
+async fn choose_personal_restore_source(
+    state: State<'_, AppState>,
+) -> Result<Option<FileCapabilityGrant>, String> {
+    file_capabilities::choose_personal_restore_source(&state)
 }
 
 #[tauri::command]
@@ -266,9 +289,24 @@ async fn backup_signing_wallet(
     state: State<'_, AppState>,
     label: String,
     wallet_name: String,
-    destination: String,
+    capability_id: String,
 ) -> Result<Operation<SigningWallet>, String> {
-    vault::backup_signing_wallet(client_from_state(&state)?, label, wallet_name, destination).await
+    vault::backup_signing_wallet(
+        client_from_state(&state)?,
+        &state,
+        label,
+        wallet_name,
+        capability_id,
+    )
+    .await
+}
+
+#[tauri::command]
+async fn choose_signer_backup_destination(
+    state: State<'_, AppState>,
+    wallet_name: String,
+) -> Result<Option<FileCapabilityGrant>, String> {
+    file_capabilities::choose_signer_backup_destination(&state, &wallet_name)
 }
 
 #[tauri::command]
@@ -281,8 +319,19 @@ async fn build_multisig_vault(
 }
 
 #[tauri::command]
-fn export_public_backup(path: String, backup: PublicVaultBackup) -> Result<String, String> {
-    vault::export_public_backup(path, backup)
+async fn choose_public_backup_export_destination(
+    state: State<'_, AppState>,
+) -> Result<Option<FileCapabilityGrant>, String> {
+    file_capabilities::choose_public_backup_export_destination(&state)
+}
+
+#[tauri::command]
+fn export_public_backup(
+    state: State<'_, AppState>,
+    capability_id: String,
+    backup: PublicVaultBackup,
+) -> Result<String, String> {
+    vault::export_public_backup(&state, capability_id, backup)
 }
 
 #[tauri::command]
@@ -354,7 +403,9 @@ fn main() {
             list_vaults,
             create_personal_vault,
             get_personal_vault,
+            choose_personal_backup_destination,
             backup_personal_vault,
+            choose_personal_restore_source,
             restore_personal_vault,
             unload_wallet,
             create_personal_receive_address,
@@ -365,8 +416,10 @@ fn main() {
             broadcast_personal_spend_proposal,
             create_signing_wallet,
             encrypt_signing_wallet,
+            choose_signer_backup_destination,
             backup_signing_wallet,
             build_multisig_vault,
+            choose_public_backup_export_destination,
             export_public_backup,
             get_receive_snapshot,
             create_spend_draft,

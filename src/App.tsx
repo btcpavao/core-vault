@@ -29,8 +29,8 @@ import {
 } from "./components/ui";
 import { demoBroadcast, demoCoreStatus, demoReceive, demoSigner, demoSpend, demoVault } from "./lib/demo";
 import {
-  choosePublicBackupPath,
-  chooseWalletBackupPath,
+  choosePublicBackupExportDestination,
+  chooseSignerBackupDestination,
   coreApi,
   isTauriRuntime,
 } from "./lib/tauri";
@@ -233,14 +233,18 @@ function App() {
     setBusy(`backup-${state.label}`);
     setError(null);
     try {
-      const path = demoMode ? `/Demo/Backups/CoreVault-${state.label}.dat` : await chooseWalletBackupPath(state.label);
-      if (!path) return;
-      if (demoMode) await waitForDemo();
-      const wallet = append(
-        demoMode
-          ? demoSigner(state.label, true, path)
-          : await coreApi.backupSigner(state.label, state.name, path),
-      );
+      let wallet: SigningWallet;
+      if (demoMode) {
+        const path = `/Demo/Backups/CoreVault-${state.label}.dat`;
+        await waitForDemo();
+        wallet = append(demoSigner(state.label, true, path));
+      } else {
+        const destination = await chooseSignerBackupDestination(state.name);
+        if (!destination) return;
+        wallet = append(
+          await coreApi.backupSigner(state.label, state.name, destination.capabilityId),
+        );
+      }
       updateSigner(state.label, { ...state, wallet });
     } catch (reason) {
       setError(formatError(reason));
@@ -255,9 +259,9 @@ function App() {
     setError(null);
     try {
       if (!demoMode) {
-        const path = await choosePublicBackupPath();
-        if (!path) return;
-        await coreApi.exportPublicBackup(path, vault.publicBackup);
+        const destination = await choosePublicBackupExportDestination();
+        if (!destination) return;
+        await coreApi.exportPublicBackup(destination.capabilityId, vault.publicBackup);
       } else {
         await waitForDemo();
       }

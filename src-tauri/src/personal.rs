@@ -1,6 +1,7 @@
 use crate::{
+    file_capabilities::{consume_file_capability, FileOperation},
     rpc::{ensure_test_chain, RpcClient},
-    security::{validate_absolute_destination, validate_wallet_name},
+    security::validate_wallet_name,
     types::{
         ActivityItem, AppState, BackupReceipt, Operation, PersonalBroadcast, PersonalReceive,
         PersonalSpendState, PersonalSpendView, PersonalVault, PersonalVaultSnapshot,
@@ -263,16 +264,21 @@ pub async fn backup_personal_vault(
     client: RpcClient,
     state: &AppState,
     wallet_name: String,
-    destination: String,
+    capability_id: String,
 ) -> Result<Operation<BackupReceipt>, String> {
     validate_wallet_name(&wallet_name)?;
-    validate_absolute_destination(&destination)?;
+    let destination = consume_file_capability(
+        state,
+        &capability_id,
+        FileOperation::PersonalBackupDestination,
+    )?;
+    let destination_display = destination.to_string_lossy().into_owned();
     let mut traces = Vec::new();
     ensure_test_chain(&client, &mut traces).await?;
     client
         .call(
             "backupwallet",
-            json!({ "destination": destination }),
+            json!({ "destination": destination_display }),
             Some(&wallet_name),
             "Bitcoin Core izrađuje stvarni wallet backup na odabranoj lokalnoj lokaciji.",
             None,
@@ -288,10 +294,10 @@ pub async fn backup_personal_vault(
     }
     let receipt = BackupReceipt {
         wallet_name: wallet_name.clone(),
-        path: destination.clone(),
+        path: destination_display,
         created_at_unix: now_unix(),
         size_bytes: metadata.len(),
-        sha256: sha256_file(Path::new(&destination))?,
+        sha256: sha256_file(&destination)?,
     };
     state
         .backed_up_wallets
@@ -306,16 +312,19 @@ pub async fn backup_personal_vault(
 
 pub async fn restore_personal_vault(
     client: RpcClient,
+    state: &AppState,
     original_wallet_name: String,
     restored_wallet_name: String,
-    backup_file: String,
+    capability_id: String,
 ) -> Result<Operation<RestoreReceipt>, String> {
     validate_wallet_name(&original_wallet_name)?;
     validate_wallet_name(&restored_wallet_name)?;
-    validate_absolute_destination(&backup_file)?;
     if original_wallet_name == restored_wallet_name {
         return Err("Testni restore mora koristiti novo, jedinstveno wallet ime.".into());
     }
+    let backup_file =
+        consume_file_capability(state, &capability_id, FileOperation::PersonalRestoreSource)?;
+    let backup_file = backup_file.to_string_lossy().into_owned();
     let mut traces = Vec::new();
     ensure_test_chain(&client, &mut traces).await?;
     let original_fingerprint =

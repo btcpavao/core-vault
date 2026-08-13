@@ -72,13 +72,6 @@ pub fn validate_public_backup(backup: &PublicVaultBackup) -> Result<String, Stri
     Ok(serialized)
 }
 
-pub fn validate_absolute_destination(path: &str) -> Result<(), String> {
-    if !Path::new(path).is_absolute() {
-        return Err("Odaberite apsolutnu lokalnu putanju.".into());
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,11 +106,5 @@ mod tests {
             "tpub{}",
             "A".repeat(107)
         )));
-    }
-
-    #[test]
-    fn rejects_relative_export_destinations() {
-        assert!(validate_absolute_destination("backup.json").is_err());
-        assert!(validate_absolute_destination("/tmp/backup.json").is_ok());
     }
 }

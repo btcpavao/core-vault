@@ -14,6 +14,8 @@ npm run verify
 
 Rust RPC tests bind a temporary loopback port. A restrictive sandbox may require permission for local networking.
 
+File-capability unit tests cover valid one-time use, replay rejection, operation mismatch, unknown and expired identifiers, fresh application state, replacement by a newer same-purpose selection, and rejection of existing write destinations. Source-level IPC regression tests also require sensitive commands to accept capability IDs instead of renderer-supplied paths.
+
 ## Isolated Regtest golden recovery test
 
 The real Bitcoin Core integration test is explicit and is not started by `npm test` or `npm run verify`:
@@ -45,6 +47,7 @@ Do not use the preservation option in CI. If `bitcoind` is not available, the ex
 3. Confirm the status rail shows the exact chain and Core version.
 4. Create a Personal Vault with a test-only passphrase.
 5. Create a backup, restore it under a temporary name, and require a matching public fingerprint.
+   Confirm cancellation is silent, selecting a second destination invalidates the first pending selection, and an existing destination is rejected instead of overwritten.
 6. Generate a fresh receive address and scan its QR code with an independent test-network wallet.
 7. Fund the wallet with test coins.
 8. Create a send proposal; verify destination, amount, fee, change, RBF, and network.

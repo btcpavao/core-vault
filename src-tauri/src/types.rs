@@ -1,3 +1,4 @@
+use crate::file_capabilities::FileCapabilityStore;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, sync::Mutex};
@@ -335,4 +336,5 @@ pub struct AppState {
     pub drafts: Mutex<HashMap<String, SpendState>>,
     pub personal_drafts: Mutex<HashMap<String, PersonalSpendState>>,
     pub backed_up_wallets: Mutex<HashMap<String, BackupReceipt>>,
+    pub file_capabilities: Mutex<FileCapabilityStore>,
 }

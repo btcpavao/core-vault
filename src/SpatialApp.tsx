@@ -30,8 +30,8 @@ import LegacyApp from "./App";
 import { t, type CopyKey } from "./i18n";
 import { playInteraction, setAmbient } from "./lib/audio";
 import {
-  choosePersonalBackupPath,
-  choosePersonalRestoreFile,
+  choosePersonalBackupDestination,
+  choosePersonalRestoreSource,
   coreApi,
   isTauriRuntime,
 } from "./lib/tauri";
@@ -305,9 +305,12 @@ export default function SpatialApp() {
         });
         return;
       }
-      const destination = await choosePersonalBackupPath(selectedWallet);
+      const destination = await choosePersonalBackupDestination(selectedWallet);
       if (!destination) return;
-      const operation = await coreApi.backupPersonalVault(selectedWallet, destination);
+      const operation = await coreApi.backupPersonalVault(
+        selectedWallet,
+        destination.capabilityId,
+      );
       setBackup(operation.data);
       appendRpc(operation.rpc);
       await refreshVaults();
@@ -328,9 +331,13 @@ export default function SpatialApp() {
         });
         return;
       }
-      const file = await choosePersonalRestoreFile();
-      if (!file) return;
-      const operation = await coreApi.restorePersonalVault(selectedWallet, restoredWalletName, file);
+      const source = await choosePersonalRestoreSource();
+      if (!source) return;
+      const operation = await coreApi.restorePersonalVault(
+        selectedWallet,
+        restoredWalletName,
+        source.capabilityId,
+      );
       setRestore(operation.data);
       appendRpc(operation.rpc);
     });

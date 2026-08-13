@@ -1,9 +1,7 @@
 use crate::{
+    file_capabilities::{consume_file_capability, FileOperation},
     rpc::{ensure_signet, RpcClient},
-    security::{
-        contains_private_material, validate_absolute_destination, validate_public_backup,
-        validate_wallet_name,
-    },
+    security::{contains_private_material, validate_public_backup, validate_wallet_name},
     types::{
         AppState, BroadcastResult, Operation, PublicVaultBackup, ReceiveSnapshot, RpcTrace,
         SignerPublic, SigningWallet, SpendDraftView, SpendState, VaultSummary,
@@ -11,8 +9,8 @@ use crate::{
 };
 use serde_json::{json, Map, Value};
 use std::{
-    fs,
-    path::Path,
+    fs::{self, OpenOptions},
+    io::Write,
     sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -102,20 +100,26 @@ pub async fn encrypt_signing_wallet(
 
 pub async fn backup_signing_wallet(
     client: RpcClient,
+    state: &AppState,
     label: String,
     wallet_name: String,
-    destination: String,
+    capability_id: String,
 ) -> Result<Operation<SigningWallet>, String> {
     validate_label(&label)?;
     validate_wallet_name(&wallet_name)?;
-    validate_absolute_destination(&destination)?;
+    let destination = consume_file_capability(
+        state,
+        &capability_id,
+        FileOperation::SignerBackupDestination,
+    )?;
+    let destination_display = destination.to_string_lossy().into_owned();
     let mut traces = Vec::new();
     ensure_signet(&client, &mut traces).await?;
     let mut wallet = verify_signing_wallet(&client, &label, &wallet_name, &mut traces).await?;
     client
         .call(
             "backupwallet",
-            json!({ "destination": destination }),
+            json!({ "destination": destination_display }),
             Some(&wallet_name),
             "Bitcoin Core zapisuje službeni backup signing walleta na odabranu lokalnu putanju.",
             None,
@@ -131,7 +135,7 @@ pub async fn backup_signing_wallet(
     if !metadata.is_file() || metadata.len() == 0 {
         return Err("STOP: nastali wallet backup nije valjana neprazna datoteka.".into());
     }
-    wallet.backup_path = Some(destination);
+    wallet.backup_path = Some(destination_display);
     Ok(Operation {
         data: wallet,
         rpc: traces,
@@ -288,20 +292,30 @@ pub async fn build_multisig_vault(
     })
 }
 
-pub fn export_public_backup(path: String, backup: PublicVaultBackup) -> Result<String, String> {
-    validate_absolute_destination(&path)?;
+pub fn export_public_backup(
+    state: &AppState,
+    capability_id: String,
+    backup: PublicVaultBackup,
+) -> Result<String, String> {
+    let path = consume_file_capability(
+        state,
+        &capability_id,
+        FileOperation::PublicBackupExportDestination,
+    )?;
     let serialized = validate_public_backup(&backup)?;
-    if Path::new(&path)
-        .extension()
-        .and_then(|value| value.to_str())
-        != Some("json")
-    {
-        return Err("Public vault konfiguracija mora biti spremljena kao .json datoteka.".into());
-    }
-    fs::write(&path, format!("{serialized}\n")).map_err(|_| {
-        "Public vault konfiguraciju nije moguće zapisati na odabranu putanju.".to_string()
-    })?;
-    Ok(path)
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(|_| {
+            "Public vault konfiguraciju nije moguće zapisati bez prepisivanja postojeće datoteke."
+                .to_string()
+        })?;
+    file.write_all(format!("{serialized}\n").as_bytes())
+        .map_err(|_| {
+            "Public vault konfiguraciju nije moguće zapisati na odabranu putanju.".to_string()
+        })?;
+    Ok(path.to_string_lossy().into_owned())
 }
 
 pub async fn get_receive_snapshot(

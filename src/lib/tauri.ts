@@ -1,10 +1,10 @@
-import { open, save } from "@tauri-apps/api/dialog";
 import { invoke } from "@tauri-apps/api/tauri";
 import type {
   BroadcastResult,
   BackupReceipt,
   ConnectionSettings,
   CoreStatus,
+  FileCapabilityGrant,
   Operation,
   PersonalBroadcast,
   PersonalReceive,
@@ -38,17 +38,17 @@ export const coreApi = {
     }),
   getPersonalVault: (walletName: string) =>
     invoke<Operation<PersonalVaultSnapshot>>("get_personal_vault", { walletName }),
-  backupPersonalVault: (walletName: string, destination: string) =>
-    invoke<Operation<BackupReceipt>>("backup_personal_vault", { walletName, destination }),
+  backupPersonalVault: (walletName: string, capabilityId: string) =>
+    invoke<Operation<BackupReceipt>>("backup_personal_vault", { walletName, capabilityId }),
   restorePersonalVault: (
     originalWalletName: string,
     restoredWalletName: string,
-    backupFile: string,
+    capabilityId: string,
   ) =>
     invoke<Operation<RestoreReceipt>>("restore_personal_vault", {
       originalWalletName,
       restoredWalletName,
-      backupFile,
+      capabilityId,
     }),
   unloadWallet: (walletName: string) =>
     invoke<Operation<boolean>>("unload_wallet", { walletName }),
@@ -96,19 +96,19 @@ export const coreApi = {
       walletName,
       passphrase,
     }),
-  backupSigner: (label: string, walletName: string, destination: string) =>
+  backupSigner: (label: string, walletName: string, capabilityId: string) =>
     invoke<Operation<SigningWallet>>("backup_signing_wallet", {
       label,
       walletName,
-      destination,
+      capabilityId,
     }),
   buildVault: (walletNames: string[], coordinatorName?: string) =>
     invoke<Operation<VaultSummary>>("build_multisig_vault", {
       walletNames,
       coordinatorName: coordinatorName ?? null,
     }),
-  exportPublicBackup: (path: string, backup: PublicVaultBackup) =>
-    invoke<string>("export_public_backup", { path, backup }),
+  exportPublicBackup: (capabilityId: string, backup: PublicVaultBackup) =>
+    invoke<string>("export_public_backup", { capabilityId, backup }),
   receive: (coordinatorName: string, existingAddress?: string) =>
     invoke<Operation<ReceiveSnapshot>>("get_receive_snapshot", {
       coordinatorName,
@@ -136,35 +136,22 @@ export const coreApi = {
     invoke<Operation<BroadcastResult>>("finalize_and_broadcast", { draftId }),
 };
 
-export async function choosePersonalBackupPath(walletName: string): Promise<string | null> {
-  return save({
-    title: `Back up ${walletName}`,
-    defaultPath: `CoreVault-${walletName}.dat`,
-    filters: [{ name: "Bitcoin Core wallet backup", extensions: ["dat"] }],
-  });
+export function choosePersonalBackupDestination(
+  walletName: string,
+): Promise<FileCapabilityGrant | null> {
+  return invoke<FileCapabilityGrant | null>("choose_personal_backup_destination", { walletName });
 }
 
-export async function choosePersonalRestoreFile(): Promise<string | null> {
-  const selected = await open({
-    title: "Choose a Bitcoin Core wallet backup",
-    multiple: false,
-    directory: false,
-    filters: [{ name: "Bitcoin Core wallet backup", extensions: ["dat"] }],
-  });
-  return typeof selected === "string" ? selected : null;
+export function choosePersonalRestoreSource(): Promise<FileCapabilityGrant | null> {
+  return invoke<FileCapabilityGrant | null>("choose_personal_restore_source");
 }
 
-export async function chooseWalletBackupPath(label: string): Promise<string | null> {
-  return save({
-    title: `Backup ${label} signing walleta`,
-    defaultPath: `CoreVault-${label}.dat`,
-  });
+export function chooseSignerBackupDestination(
+  walletName: string,
+): Promise<FileCapabilityGrant | null> {
+  return invoke<FileCapabilityGrant | null>("choose_signer_backup_destination", { walletName });
 }
 
-export async function choosePublicBackupPath(): Promise<string | null> {
-  return save({
-    title: "Export public vault configuration",
-    defaultPath: "corevault-2of3-public-backup.json",
-    filters: [{ name: "JSON", extensions: ["json"] }],
-  });
+export function choosePublicBackupExportDestination(): Promise<FileCapabilityGrant | null> {
+  return invoke<FileCapabilityGrant | null>("choose_public_backup_export_destination");
 }

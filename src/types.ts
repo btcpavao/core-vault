@@ -21,6 +21,12 @@ export interface Operation<T> {
   rpc: RpcTrace[];
 }
 
+export interface FileCapabilityGrant {
+  capabilityId: string;
+  displayPath: string;
+  displayName: string;
+}
+
 export interface CoreStatus {
   connected: boolean;
   supported: boolean;

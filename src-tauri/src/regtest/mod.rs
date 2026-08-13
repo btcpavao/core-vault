@@ -3,7 +3,11 @@ mod harness;
 #[cfg(test)]
 mod tests {
     use super::harness::{require_regtest_chain, RegtestNode};
-    use crate::{personal, types::AppState};
+    use crate::{
+        file_capabilities::{issue_test_capability, FileOperation},
+        personal,
+        types::AppState,
+    };
     use serde_json::Value;
 
     const ORIGINAL_WALLET: &str = "golden_personal";
@@ -91,16 +95,25 @@ mod tests {
         );
 
         let backup_path = node.artifact_path("golden-personal-wallet.dat")?;
+        let backup_capability = issue_test_capability(
+            &state,
+            backup_path.clone(),
+            FileOperation::PersonalBackupDestination,
+        )
+        .map_err(|error| stage("backup destination capability", error))?;
         node.assert_regtest().await?;
         let backup = personal::backup_personal_vault(
             client.clone(),
             &state,
             ORIGINAL_WALLET.into(),
-            backup_path.to_string_lossy().into_owned(),
+            backup_capability,
         )
         .await
         .map_err(|error| stage("backupwallet", error))?;
-        assert_eq!(backup.data.path, backup_path.to_string_lossy());
+        let canonical_backup_path = backup_path
+            .canonicalize()
+            .map_err(|error| stage("canonical backup path", error))?;
+        assert_eq!(backup.data.path, canonical_backup_path.to_string_lossy());
         assert!(backup.data.size_bytes > 0);
         assert_eq!(backup.data.sha256.len(), 64);
         let backup_metadata = std::fs::metadata(&backup_path)
@@ -111,12 +124,19 @@ mod tests {
         let original_fingerprint = funded.data.vault.public_fingerprint.clone();
         assert_eq!(original_fingerprint.len(), 64);
 
+        let restore_capability = issue_test_capability(
+            &state,
+            backup_path.clone(),
+            FileOperation::PersonalRestoreSource,
+        )
+        .map_err(|error| stage("restore source capability", error))?;
         node.assert_regtest().await?;
         let restored = personal::restore_personal_vault(
             client.clone(),
+            &state,
             ORIGINAL_WALLET.into(),
             RESTORED_WALLET.into(),
-            backup_path.to_string_lossy().into_owned(),
+            restore_capability,
         )
         .await
         .map_err(|error| stage("restorewallet", error))?;
