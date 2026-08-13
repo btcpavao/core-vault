@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod personal;
+#[cfg(test)]
+mod regtest;
 mod rpc;
 mod security;
 mod types;

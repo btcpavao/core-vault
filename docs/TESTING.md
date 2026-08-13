@@ -14,6 +14,30 @@ npm run verify
 
 Rust RPC tests bind a temporary loopback port. A restrictive sandbox may require permission for local networking.
 
+## Isolated Regtest golden recovery test
+
+The real Bitcoin Core integration test is explicit and is not started by `npm test` or `npm run verify`:
+
+```bash
+npm run test:regtest
+```
+
+The command discovers `bitcoind` through `PATH`. To use a specific executable, provide an absolute path:
+
+```bash
+BITCOIND=/absolute/path/to/bitcoind npm run test:regtest
+```
+
+The harness creates a unique `core-vault-regtest-*` directory under the operating system's temporary directory, starts only Regtest on a collision-resistant loopback RPC port, authenticates with that node's cookie, and refuses wallet mutations unless Core reports `chain == "regtest"`. It never accepts an existing datadir. The owned process is shut down and only the marked temporary directory is removed after the test.
+
+For a failing local test that needs inspection, temporary state can be retained explicitly:
+
+```bash
+CORE_VAULT_KEEP_REGTEST=1 npm run test:regtest
+```
+
+Do not use the preservation option in CI. If `bitcoind` is not available, the explicit command fails with an actionable message instead of silently skipping the golden test.
+
 ## Desktop smoke test
 
 1. Start Bitcoin Core 31.1 with `-server=1` on Signet, Testnet4, or Regtest.
