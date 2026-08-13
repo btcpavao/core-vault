@@ -23,4 +23,11 @@ describe("real-time experience boundary", () => {
     expect(rootSource).toContain("visualState={visualState}");
     expect(roomSource).toContain("visualState: EngineRoomVisualState");
   });
+
+  it("keeps mounted Canvas fallback content passive", () => {
+    const rootSource = source("src/experience/ExperienceRoot.tsx");
+
+    expect(rootSource).not.toContain("function WebGLFallback");
+    expect(rootSource).toContain('className="experience-canvas-fallback"');
+  });
 });

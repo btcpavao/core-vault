@@ -8,7 +8,7 @@ import "./experience.css";
 
 interface PresentationBoundaryProps {
   children: ReactNode;
-  onFailure: () => void;
+  onFailure: (message: string) => void;
 }
 
 interface PresentationBoundaryState {
@@ -25,19 +25,14 @@ class PresentationBoundary extends Component<
     return { failed: true };
   }
 
-  componentDidCatch(_error: Error, _info: ErrorInfo) {
-    this.props.onFailure();
+  componentDidCatch(error: Error, _info: ErrorInfo) {
+    this.props.onFailure(error.message || "The React Three Fiber scene failed to render.");
   }
 
   render() {
     if (this.state.failed) return null;
     return this.props.children;
   }
-}
-
-function WebGLFallback({ onFailure }: { onFailure: () => void }) {
-  useEffect(() => onFailure(), [onFailure]);
-  return null;
 }
 
 function useReducedMotion() {
@@ -102,7 +97,7 @@ export default function ExperienceRoot() {
     [nodeRead.status],
   );
   const [reactorFocused, setReactorFocused] = useState(false);
-  const [presentationFailed, setPresentationFailed] = useState(false);
+  const [presentationFailure, setPresentationFailure] = useState<string | null>(null);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -128,7 +123,7 @@ export default function ExperienceRoot() {
       </a>
 
       <section className="experience-viewport" aria-label="Real-time Engine Room">
-        {presentationFailed ? (
+        {presentationFailure ? (
           <div className="experience-fallback" role="alert">
             <p className="experience-kicker">Presentation unavailable</p>
             <h1>Real-time environment could not start.</h1>
@@ -136,22 +131,29 @@ export default function ExperienceRoot() {
               This is a WebGL presentation failure. It does not mean Bitcoin Core failed, and no
               wallet or node state was changed.
             </p>
+            {import.meta.env.DEV && (
+              <p className="experience-diagnostic">Diagnostic: {presentationFailure}</p>
+            )}
             <a href="/">Return to the existing Core Vault interface</a>
           </div>
         ) : (
-          <PresentationBoundary onFailure={() => setPresentationFailed(true)}>
+          <PresentationBoundary onFailure={setPresentationFailure}>
             <Canvas
               dpr={[1, 1.5]}
               frameloop={visible ? "always" : "never"}
               camera={{ position: [7.6, 4.65, 10.8], fov: 42, near: 0.1, far: 70 }}
               gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
               onPointerMissed={clearFocus}
-              fallback={<WebGLFallback onFailure={() => setPresentationFailed(true)} />}
+              fallback={
+                <span className="experience-canvas-fallback">
+                  This WebView does not support the Canvas presentation surface.
+                </span>
+              }
               onCreated={({ gl }) => {
                 const canvas = gl.domElement;
                 const onContextLost = (event: Event) => {
                   event.preventDefault();
-                  setPresentationFailed(true);
+                  setPresentationFailure("The WebGL rendering context was lost.");
                 };
                 canvas.addEventListener("webglcontextlost", onContextLost, { once: true });
               }}
@@ -168,7 +170,7 @@ export default function ExperienceRoot() {
         )}
       </section>
 
-      {!presentationFailed && (
+      {!presentationFailure && (
         <>
           <header className="experience-room-identity">
             <p className="experience-kicker">Real-time architecture proof</p>
