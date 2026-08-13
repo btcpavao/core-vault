@@ -1,10 +1,15 @@
 import { memo } from "react";
-import { BronzeMaterial, LimestoneMaterial } from "../../../materials/WorldMaterials";
+import {
+  BronzeMaterial,
+  LimestoneMaterial,
+  type LimestoneSurface,
+} from "../../../materials/WorldMaterials";
 
 interface StoneBlockProps {
   position: [number, number, number];
   scale: [number, number, number];
   tone?: "pale" | "base" | "shadow" | "inset";
+  surface?: LimestoneSurface;
   rotation?: [number, number, number];
   castShadow?: boolean;
 }
@@ -13,13 +18,14 @@ function StoneBlock({
   position,
   scale,
   tone = "base",
+  surface = "architectural",
   rotation,
   castShadow = false,
 }: StoneBlockProps) {
   return (
     <mesh position={position} rotation={rotation} castShadow={castShadow} receiveShadow>
       <boxGeometry args={scale} />
-      <LimestoneMaterial tone={tone} />
+      <LimestoneMaterial tone={tone} surface={surface} />
     </mesh>
   );
 }
@@ -127,11 +133,11 @@ function ReactorDais() {
     <group position={[0, 0, -0.72]}>
       <mesh position={[0, 0.09, 0]} receiveShadow>
         <cylinderGeometry args={[3.45, 3.68, 0.3, 64]} />
-        <LimestoneMaterial tone="base" />
+        <LimestoneMaterial tone="base" surface="floor" />
       </mesh>
       <mesh position={[0, 0.26, 0]} receiveShadow>
         <cylinderGeometry args={[2.92, 3.1, 0.18, 64]} />
-        <LimestoneMaterial tone="pale" />
+        <LimestoneMaterial tone="pale" surface="floor" />
       </mesh>
       {[2.98, 3.5].map((radius) => (
         <mesh key={radius} position={[0, 0.31, 0]} rotation={[Math.PI / 2, 0, 0]}>
@@ -148,7 +154,7 @@ function RoomArchitectureComponent({ onClearFocus }: { onClearFocus: () => void 
     <group name="engine-room-static-architecture">
       <mesh position={[0, -0.12, -0.2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow onClick={onClearFocus}>
         <planeGeometry args={[13.4, 13]} />
-        <LimestoneMaterial tone="base" />
+        <LimestoneMaterial tone="base" surface="floor" />
       </mesh>
       <StoneBlock position={[0, -0.27, -0.2]} scale={[13.5, 0.35, 13]} tone="inset" />
       <BackWallBays />

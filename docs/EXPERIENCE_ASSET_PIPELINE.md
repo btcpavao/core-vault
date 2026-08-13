@@ -28,8 +28,25 @@ This is the minimal, auditable glTF/GLB path for the real-time Core Vault presen
 - Use limestone, restrained aged bronze/dark metal, technical glass, and state-driven blue energy only when functionally justified.
 - Avoid ornamental bright gold, random surface noise, particles, and post-processing as substitutes for structure.
 - Keep props low enough in complexity for an integrated desktop GPU. Prefer repeated primitive geometry and shared materials.
-- Texture assets are optional; when added, prefer 1K sources, use 2K only for a visually proven hero need, and document color space and compression.
+- Prefer the shared 128 px procedural maps for room-scale surfaces. A larger file-backed texture needs a visually proven hero need, a documented licence, and an explicit performance review.
 - Use PBR metalness/roughness values. Do not bake state-driven energy into a texture.
+
+## Engine Room procedural PBR maps
+
+`src/experience/materials/proceduralTextures.ts` generates the Engine Room material maps once per presentation runtime. The generator is deterministic, self-contained, and makes no network or filesystem request. Every generated map is **Core Vault original** and has no third-party attribution requirement.
+
+The current budget is eleven shared 128 × 128 RGBA maps:
+
+- architectural limestone: base colour, roughness, and normal;
+- floor limestone: base colour, roughness, normal, and restrained slab joints;
+- brushed bronze: base colour, roughness, normal, and metalness;
+- technical glass: a low-contrast roughness map; glass Fresnel response comes from the physical material IOR.
+
+Base-colour maps use sRGB. Roughness, normal, and metalness maps remain in the non-colour data space. The complete uncompressed level-zero set is 720,896 bytes (0.69 MiB), or approximately 0.92 MiB with generated mip levels. All instances share these textures; no state-driven energy texture or post-processing pass is added.
+
+Metal and glass reflections use one local 64 px environment capture assembled from three restrained Drei lightformers. It renders once, is not used as the room background, downloads no HDR image, and adds no per-frame post-processing pass.
+
+The stone generator uses low-frequency periodic variation, sparse shallow pores, and restrained floor joints. It intentionally does not generate cracks, ruin damage, or ornamental patterning. The bronze generator adds directional brushing and small reflectivity variation with limited patina. The glass map adds only enough imperfection for the transparent surface to read under the existing lights.
 
 ## First proof asset
 

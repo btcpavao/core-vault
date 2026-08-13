@@ -22,7 +22,7 @@ function ReactorFoundation() {
     <group>
       <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[2.02, 2.22, 0.36, 56]} />
-        <LimestoneMaterial tone="shadow" />
+        <LimestoneMaterial tone="base" />
       </mesh>
       <mesh position={[0, 0.43, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[1.7, 1.87, 0.22, 56]} />
@@ -220,7 +220,7 @@ export function CoreReactor({
       </group>
       <mesh position={[0, 2.12, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.98, 0.98, 2.95, 48, 1, true]} />
-        <TechnicalGlassMaterial opacity={0.2} />
+        <TechnicalGlassMaterial opacity={0.26} />
       </mesh>
       <ReactorCage />
       <ReactorConnectors visualState={visualState} />

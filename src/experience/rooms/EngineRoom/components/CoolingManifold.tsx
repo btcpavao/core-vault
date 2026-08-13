@@ -1,9 +1,10 @@
 import { Component, Suspense, useMemo, type ErrorInfo, type ReactNode } from "react";
 import { useGLTF } from "@react-three/drei";
-import type { Group, Mesh } from "three";
+import type { Group, Material, Mesh } from "three";
 import { ENGINE_ROOM_ASSETS } from "../../../assets/assetManifest";
 import {
   BronzeMaterial,
+  clonePolishedAuthoredMaterial,
   LimestoneMaterial,
   TechnicalGlassMaterial,
 } from "../../../materials/WorldMaterials";
@@ -17,7 +18,7 @@ function CoolingManifoldFallback({ muted = false }: { muted?: boolean }) {
       </mesh>
       <mesh position={[0, 1.42, 0]} castShadow>
         <cylinderGeometry args={[0.72, 0.72, 2.05, 32]} />
-        <TechnicalGlassMaterial opacity={0.23} />
+        <TechnicalGlassMaterial opacity={0.27} />
       </mesh>
       {[0.39, 1.42, 2.45].map((y) => (
         <mesh key={y} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
@@ -53,11 +54,23 @@ function CoolingManifoldModel() {
   const { scene } = useGLTF(ENGINE_ROOM_ASSETS.coolingManifold.path);
   const model = useMemo(() => {
     const cloned = scene.clone(true) as Group;
+    const materialCopies = new Map<Material, Material>();
+    const polishMaterial = (source: Material) => {
+      const existing = materialCopies.get(source);
+      if (existing) return existing;
+      const polished = clonePolishedAuthoredMaterial(source);
+      materialCopies.set(source, polished);
+      return polished;
+    };
+
     cloned.traverse((child) => {
       if (!("isMesh" in child) || !child.isMesh) return;
       const mesh = child as Mesh;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map(polishMaterial)
+        : polishMaterial(mesh.material);
     });
     return cloned;
   }, [scene]);

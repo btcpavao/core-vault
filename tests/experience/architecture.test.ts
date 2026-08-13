@@ -51,6 +51,7 @@ describe("real-time experience boundary", () => {
 
   it("uses the shared semantic PBR material system across the vertical slice", () => {
     const materialsSource = source("src/experience/materials/WorldMaterials.tsx");
+    const engineRoomSource = source("src/experience/rooms/EngineRoom/EngineRoom.tsx");
     const roomSource = roomFiles.map(source).join("\n");
 
     expect(materialsSource).toContain("WORLD_MATERIALS");
@@ -62,6 +63,8 @@ describe("real-time experience boundary", () => {
     expect(roomSource).toMatch(/BronzeMaterial/);
     expect(roomSource).toMatch(/TechnicalGlassMaterial/);
     expect(roomSource).toMatch(/EnergyMaterial/);
+    expect(engineRoomSource).toContain('<Environment background={false} frames={1} resolution={64}>');
+    expect(engineRoomSource).not.toMatch(/\.hdr|\.exr|preset=/i);
   });
 
   it("loads one central-manifest GLB with a room-local passive fallback", () => {
