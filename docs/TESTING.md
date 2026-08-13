@@ -54,7 +54,13 @@ The golden Personal Vault spend test uses production Rust/domain functions to cr
 cargo test --manifest-path src-tauri/Cargo.toml --locked regtest::tests::golden_personal_vault_spend_lifecycle -- --exact --include-ignored --test-threads=1
 ```
 
-The owned process is shut down and only the marked temporary directory is removed after each test. These tests do not yet prove the complete real-Core 2-of-3 multisig lifecycle.
+The golden 2-of-3 test uses the same production multisig domain path against actual Bitcoin Core 31.1 Regtest. It creates three independently encrypted and locked signer wallets plus a private-key-disabled coordinator, verifies Core accepted the actual public `wsh(sortedmulti(2,...))` receive/change policy, funds it, and proves the signature progression `0 → insufficient`, `1 → insufficient`, duplicate signer `→ still insufficient`, and two distinct signers `→ threshold reached`. It then finalizes locally, requires strict Accepted preflight and privileged one-time broadcast authorization, exercises the disabled-network guard, observes the exact reviewed transaction in the mempool, mines it, and verifies recipient funds, change ownership, fee, and coordinator balance. Run only that proof with:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml --locked regtest::tests::golden_two_of_three_multisig_lifecycle -- --exact --include-ignored --test-threads=1
+```
+
+This is a same-machine 2-of-3 domain lifecycle proof: all three signer wallets and the coordinator live in one isolated Bitcoin Core process, while the PSBT remains in privileged Rust memory. It does not prove file/USB/QR PSBT transport, independent offline signer machines, signer backup recovery, or public coordinator reconstruction. The owned process is shut down and only the marked temporary directory is removed after each test.
 
 For a failing local test that needs inspection, temporary state can be retained explicitly:
 

@@ -275,6 +275,42 @@ impl RegtestNode {
             .await
     }
 
+    pub async fn wallet_descriptors(&self, wallet_name: &str) -> Result<Value, String> {
+        self.rpc(
+            "listdescriptors",
+            json!({ "private": false }),
+            Some(wallet_name),
+            true,
+        )
+        .await
+    }
+
+    pub async fn descriptor_info(&self, descriptor: &str) -> Result<Value, String> {
+        self.rpc(
+            "getdescriptorinfo",
+            json!({ "descriptor": descriptor }),
+            None,
+            true,
+        )
+        .await
+    }
+
+    pub async fn derive_address(&self, descriptor: &str, index: u64) -> Result<String, String> {
+        self.rpc(
+            "deriveaddresses",
+            json!({ "descriptor": descriptor, "range": [index, index] }),
+            None,
+            true,
+        )
+        .await?
+        .as_array()
+        .and_then(|addresses| addresses.first())
+        .and_then(Value::as_str)
+        .filter(|address| !address.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| "fixture Core nije izveo očekivanu descriptor adresu".to_string())
+    }
+
     pub async fn address_info(&self, wallet_name: &str, address: &str) -> Result<Value, String> {
         self.rpc(
             "getaddressinfo",

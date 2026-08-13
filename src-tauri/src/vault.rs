@@ -144,7 +144,7 @@ pub async fn build_multisig_vault(
     }
 
     let mut traces = Vec::new();
-    ensure_signet(&client, &mut traces).await?;
+    let network = ensure_test_chain(&client, &mut traces).await?;
     let mut receive_keys = Vec::new();
     let mut change_keys = Vec::new();
 
@@ -216,8 +216,7 @@ pub async fn build_multisig_vault(
                         "active": true,
                         "internal": false,
                         "range": [0, 1000],
-                        "timestamp": "now",
-                        "label": "Core Vault receive"
+                        "timestamp": "now"
                     },
                     {
                         "desc": change_descriptor,
@@ -252,7 +251,7 @@ pub async fn build_multisig_vault(
     let public_backup = PublicVaultBackup {
         schema_version: 1,
         exported_at_unix,
-        network: "signet".into(),
+        network: network.clone(),
         policy_type: "wsh-sortedmulti".into(),
         threshold: 2,
         participants: 3,
@@ -268,7 +267,7 @@ pub async fn build_multisig_vault(
         data: VaultSummary {
             policy: "2-of-3".into(),
             address_type: "Native SegWit".into(),
-            network: "Signet".into(),
+            network: test_network_label(&network).into(),
             coordinator_name,
             coordinator_has_private_keys: false,
             signers,
@@ -313,7 +312,7 @@ pub async fn get_receive_snapshot(
 ) -> Result<Operation<ReceiveSnapshot>, String> {
     validate_wallet_name(&coordinator_name)?;
     let mut traces = Vec::new();
-    ensure_signet(&client, &mut traces).await?;
+    ensure_test_chain(&client, &mut traces).await?;
     verify_coordinator(&client, &coordinator_name, &mut traces).await?;
     let address = match existing_address.filter(|value| !value.trim().is_empty()) {
         Some(value) => value,
@@ -322,7 +321,7 @@ pub async fn get_receive_snapshot(
                 "getnewaddress",
                 json!({ "label": "Core Vault receive test", "address_type": "bech32" }),
                 Some(&coordinator_name),
-                "Bitcoin Core generira novu Signet receive adresu iz aktivnog vault descriptora.",
+                "Bitcoin Core generira novu receive adresu iz aktivnog vault descriptora na potvrđenoj testnoj mreži.",
                 None,
                 false,
                 &mut traces,
@@ -332,8 +331,8 @@ pub async fn get_receive_snapshot(
             .ok_or_else(|| "Bitcoin Core nije vratio receive adresu.".to_string())?
             .to_string(),
     };
-    if !address.starts_with("tb1") {
-        return Err("STOP: coordinator nije vratio očekivanu Signet Native SegWit adresu.".into());
+    if address.trim().is_empty() {
+        return Err("STOP: coordinator nije vratio valjanu Native SegWit adresu.".into());
     }
     let address_info = client
         .call(
@@ -390,7 +389,7 @@ pub async fn create_spend_draft(
         return Err("Fee rate mora biti između 1 i 1.000 sat/vB.".into());
     }
     let mut traces = Vec::new();
-    ensure_signet(&client, &mut traces).await?;
+    let network = ensure_test_chain(&client, &mut traces).await?;
     verify_coordinator(&client, &coordinator_name, &mut traces).await?;
     let starting_balances = client
         .call(
@@ -417,7 +416,7 @@ pub async fn create_spend_draft(
         .await?;
     if validated.get("isvalid").and_then(Value::as_bool) != Some(true) {
         return Err(
-            "Adresa primatelja nije valjana Signet adresa. Transakcija nije napravljena.".into(),
+            "Adresa primatelja nije valjana adresa za potvrđenu testnu mrežu. Transakcija nije napravljena.".into(),
         );
     }
 
@@ -459,6 +458,7 @@ pub async fn create_spend_draft(
     let draft_id = next_draft_id();
     let draft = SpendState {
         coordinator_name,
+        network,
         destination,
         amount_sats,
         starting_balance_sats,
@@ -515,7 +515,7 @@ pub async fn sign_spend_draft(
     }
     let passphrase = Zeroizing::new(passphrase);
     let mut traces = Vec::new();
-    ensure_signet(&client, &mut traces).await?;
+    ensure_test_chain(&client, &mut traces).await?;
     let wallet = verify_signing_wallet(&client, "Signer", &wallet_name, &mut traces).await?;
     if wallet.encrypted && passphrase.is_empty() {
         return Err(format!(
@@ -705,7 +705,7 @@ pub async fn finalize_multisig_spend(
         return Err("Transakcija je već finalizirana.".into());
     }
     let mut traces = Vec::new();
-    ensure_signet(&client, &mut traces).await?;
+    ensure_test_chain(&client, &mut traces).await?;
     verify_coordinator(&client, &snapshot.coordinator_name, &mut traces).await?;
     let finalized = client
         .call(
@@ -781,8 +781,8 @@ pub async fn preflight_multisig_spend(
         .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
     let transaction_identity = finalized_transaction_identity(&raw_hex);
     let mut traces = Vec::new();
-    let preflight = match ensure_signet(&client, &mut traces).await {
-        Ok(()) => match client
+    let preflight = match ensure_test_chain(&client, &mut traces).await {
+        Ok(_) => match client
             .call(
                 "testmempoolaccept",
                 json!({ "rawtxs": [raw_hex] }),
@@ -865,7 +865,7 @@ pub fn prepare_multisig_broadcast_authorization(
             destination: draft.destination.clone(),
             amount_sats: draft.amount_sats,
             fee_sats: btc_to_sats(draft.fee_btc),
-            network: "Signet".into(),
+            network: test_network_label(&draft.network).into(),
         },
     })
 }
@@ -908,7 +908,7 @@ pub fn complete_multisig_broadcast_authorization(
 }
 
 #[cfg(test)]
-fn request_multisig_broadcast_authorization_with<C: BroadcastConfirmer>(
+pub(crate) fn request_multisig_broadcast_authorization_with<C: BroadcastConfirmer>(
     state: &AppState,
     draft_id: &str,
     confirmer: &C,
@@ -966,7 +966,13 @@ pub async fn broadcast_multisig_spend(
 
     let mut traces = Vec::new();
     let attempt = async {
-        ensure_signet(&client, &mut traces).await?;
+        let current_network = ensure_test_chain(&client, &mut traces).await?;
+        if current_network != snapshot.network {
+            return Err(
+                "STOP: aktivna Bitcoin Core mreža ne odgovara mreži pregledanog transaction drafta. Autorizacija je potrošena."
+                    .into(),
+            );
+        }
         let network = client
             .call(
                 "getnetworkinfo",
@@ -993,7 +999,7 @@ pub async fn broadcast_multisig_spend(
                 "sendrawtransaction",
                 json!({ "hexstring": raw_hex }),
                 None,
-                "Bitcoin Core broadcasta autoriziranu finaliziranu transakciju na Signet.",
+                "Bitcoin Core broadcasta autoriziranu finaliziranu transakciju na potvrđenoj testnoj mreži.",
                 Some(json!({ "hexstring": "[REDACTED]" })),
                 false,
                 &mut traces,
@@ -1076,6 +1082,16 @@ fn ensure_legacy_ready_for_broadcast(draft: &SpendState) -> Result<(&str, String
         .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
     ensure_broadcast_preflight(&draft.mempool_preflight, raw_hex)?;
     Ok((raw_hex, finalized_transaction_identity(raw_hex)))
+}
+
+fn test_network_label(network: &str) -> &str {
+    match network {
+        "signet" => "Signet",
+        "test" => "Testnet",
+        "testnet4" => "Testnet4",
+        "regtest" => "Regtest",
+        _ => "Unknown",
+    }
 }
 
 #[derive(Debug)]
@@ -1526,7 +1542,20 @@ fn validate_import_result(result: &Value) -> Result<(), String> {
             .iter()
             .any(|entry| entry.get("success").and_then(Value::as_bool) != Some(true))
     {
-        return Err("STOP: receive i change descriptor nisu oba uspješno importana.".into());
+        let reasons = entries
+            .iter()
+            .filter(|entry| entry.get("success").and_then(Value::as_bool) != Some(true))
+            .filter_map(|entry| entry.pointer("/error/message").and_then(Value::as_str))
+            .map(sanitize_rpc_text)
+            .collect::<Vec<_>>();
+        let detail = if reasons.is_empty() {
+            "Bitcoin Core nije vratio siguran razlog odbijanja.".into()
+        } else {
+            reasons.join("; ")
+        };
+        return Err(format!(
+            "STOP: receive i change descriptor nisu oba uspješno importana. Razlog: {detail}"
+        ));
     }
     Ok(())
 }
@@ -2934,6 +2963,7 @@ mod tests {
     fn test_spend_state() -> SpendState {
         SpendState {
             coordinator_name: "CoreVault-2of3".into(),
+            network: "signet".into(),
             destination: "tb1qtestdestination".into(),
             amount_sats: 5_000,
             starting_balance_sats: 10_000,

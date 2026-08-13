@@ -54,7 +54,10 @@ pub fn contains_private_material(value: &str) -> bool {
 
 pub fn validate_public_backup(backup: &PublicVaultBackup) -> Result<String, String> {
     if backup.schema_version != 1
-        || backup.network != "signet"
+        || !matches!(
+            backup.network.as_str(),
+            "signet" | "test" | "testnet4" | "regtest"
+        )
         || backup.policy_type != "wsh-sortedmulti"
         || backup.threshold != 2
         || backup.participants != 3

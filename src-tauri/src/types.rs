@@ -375,6 +375,7 @@ pub struct SignerRelockRequired {
 #[derive(Clone, Debug)]
 pub struct SpendState {
     pub coordinator_name: String,
+    pub network: String,
     pub destination: String,
     pub amount_sats: u64,
     pub starting_balance_sats: u64,
