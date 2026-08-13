@@ -24,6 +24,8 @@ Personal Vault passphrase-lifecycle tests mount the real React shell in jsdom an
 npx vitest run tests/passphrase-lifecycle.test.tsx
 ```
 
+Legacy 2-of-3 signer tests use a deterministic loopback JSON-RPC server to cover every signing/relock result pair, unlock failure, retry-lock success and failure, and direct backend attempts to bypass the stop through another signer or the combined finalization/broadcast command. A successful `walletlock` JSON-RPC response is the current practical authoritative lock confirmation; the retry action never unlocks or signs again. The relock-required workflow state is currently held only in memory, so restart-time wallet lock reconciliation remains future work.
+
 ## Isolated Regtest golden recovery test
 
 The real Bitcoin Core integration test is explicit and is not started by `npm test` or `npm run verify`:

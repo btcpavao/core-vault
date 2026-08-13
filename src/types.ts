@@ -225,6 +225,14 @@ export interface SpendDraft {
   feeSats: number;
   signedBy: string[];
   complete: boolean;
+  relockRequired: SignerRelockRequired | null;
+}
+
+export interface SignerRelockRequired {
+  walletName: string;
+  signatureAdded: boolean;
+  signingError: string | null;
+  relockError: string;
 }
 
 export interface BroadcastResult {

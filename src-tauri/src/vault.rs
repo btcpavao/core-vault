@@ -1,10 +1,11 @@
 use crate::{
     file_capabilities::{consume_file_capability, FileOperation},
-    rpc::{ensure_signet, RpcClient},
+    rpc::{ensure_signet, sanitize_rpc_text, RpcClient},
     security::{contains_private_material, validate_public_backup, validate_wallet_name},
     types::{
         AppState, BroadcastResult, Operation, PublicVaultBackup, ReceiveSnapshot, RpcTrace,
-        SignerPublic, SigningWallet, SpendDraftView, SpendState, VaultSummary,
+        SignerPublic, SignerRelockRequired, SigningWallet, SpendDraftView, SpendState,
+        VaultSummary,
     },
 };
 use serde_json::{json, Map, Value};
@@ -478,6 +479,7 @@ pub async fn create_spend_draft(
         psbt,
         signed_by: Vec::new(),
         complete: false,
+        relock_required: None,
     };
     let view = draft.view(draft_id.clone());
     state
@@ -506,6 +508,7 @@ pub async fn sign_spend_draft(
         .get(&draft_id)
         .cloned()
         .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+    ensure_legacy_workflow_can_progress(&snapshot)?;
     if snapshot.signed_by.iter().any(|name| name == &wallet_name) {
         return Err(
             "Ovaj signing wallet već je odobrio transakciju. Odaberite drugi ključ.".into(),
@@ -535,7 +538,7 @@ pub async fn sign_spend_draft(
             .await?;
     }
 
-    let process_result = client
+    let signing_result = client
         .call(
             "walletprocesspsbt",
             json!({
@@ -550,10 +553,11 @@ pub async fn sign_spend_draft(
             true,
             &mut traces,
         )
-        .await;
+        .await
+        .and_then(|processed| parse_legacy_signature(&snapshot.psbt, processed));
 
-    if wallet.encrypted {
-        let _ = client
+    let relock_result = if wallet.encrypted {
+        client
             .call(
                 "walletlock",
                 json!({}),
@@ -563,21 +567,13 @@ pub async fn sign_spend_draft(
                 false,
                 &mut traces,
             )
-            .await;
-    }
+            .await
+            .map(|_| ())
+    } else {
+        Ok(())
+    };
 
-    let processed = process_result?;
-    let updated_psbt = processed
-        .get("psbt")
-        .and_then(Value::as_str)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Bitcoin Core nije vratio ažurirani PSBT.".to_string())?
-        .to_string();
-    if updated_psbt == snapshot.psbt {
-        return Err(format!(
-            "{wallet_name} nije dodao potpis. Bitcoin je siguran i transakcija nije poslana."
-        ));
-    }
+    let outcome = classify_signer_signing_outcome(signing_result, relock_result);
 
     let mut drafts = state
         .drafts
@@ -591,15 +587,98 @@ pub async fn sign_spend_draft(
             "Transaction draft promijenjen je drugim potpisom. Ponovno učitajte stanje.".into(),
         );
     }
-    draft.psbt = updated_psbt;
-    draft.signed_by.push(wallet_name);
-    draft.complete = processed
-        .get("complete")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
+
+    match outcome {
+        SignerSigningOutcome::SignedAndLocked(signature) => {
+            apply_legacy_signature(draft, &wallet_name, signature);
+            draft.relock_required = None;
+        }
+        SignerSigningOutcome::SignedButRelockFailed {
+            signature,
+            relock_error,
+        } => {
+            apply_legacy_signature(draft, &wallet_name, signature);
+            draft.relock_required =
+                Some(relock_required_state(wallet_name, true, None, relock_error));
+        }
+        SignerSigningOutcome::SigningFailedAndLocked { signing_error } => {
+            return Err(signing_error);
+        }
+        SignerSigningOutcome::SigningFailedAndRelockFailed {
+            signing_error,
+            relock_error,
+        } => {
+            draft.relock_required = Some(relock_required_state(
+                wallet_name,
+                false,
+                Some(signing_error),
+                relock_error,
+            ));
+        }
+    }
+
     let view = draft.view(draft_id);
     Ok(Operation {
         data: view,
+        rpc: traces,
+    })
+}
+
+pub async fn retry_signer_lock(
+    client: RpcClient,
+    state: &AppState,
+    draft_id: String,
+) -> Result<Operation<SpendDraftView>, String> {
+    let stop = state
+        .drafts
+        .lock()
+        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?
+        .get(&draft_id)
+        .cloned()
+        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?
+        .relock_required
+        .ok_or_else(|| {
+            "Ovaj transaction draft ne zahtijeva ponovno zaključavanje signera.".to_string()
+        })?;
+
+    let mut traces = Vec::new();
+    let relock_result = client
+        .call(
+            "walletlock",
+            json!({}),
+            Some(&stop.wallet_name),
+            "Bitcoin Core ponovno pokušava zaključati točno onaj signer čiji cleanup nije potvrđen.",
+            None,
+            false,
+            &mut traces,
+        )
+        .await;
+
+    let mut drafts = state
+        .drafts
+        .lock()
+        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
+    let draft = drafts
+        .get_mut(&draft_id)
+        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+    let current_stop = draft.relock_required.as_mut().ok_or_else(|| {
+        "Signer relock stanje promijenjeno je tijekom pokušaja; ponovno učitajte transaction."
+            .to_string()
+    })?;
+    if current_stop.wallet_name != stop.wallet_name {
+        return Err(
+            "Signer relock stanje promijenjeno je tijekom pokušaja; ponovno učitajte transaction."
+                .into(),
+        );
+    }
+
+    match relock_result {
+        Ok(_) => draft.relock_required = None,
+        Err(error) => current_stop.relock_error = sanitize_rpc_text(&error),
+    }
+
+    Ok(Operation {
+        data: draft.view(draft_id),
         rpc: traces,
     })
 }
@@ -616,6 +695,7 @@ pub async fn finalize_and_broadcast(
         .get(&draft_id)
         .cloned()
         .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+    ensure_legacy_workflow_can_progress(&snapshot)?;
     if snapshot.signed_by.len() < 2 || !snapshot.complete {
         return Err("Transakcija treba još potpisa. Nije finalizirana niti poslana.".into());
     }
@@ -694,6 +774,105 @@ pub async fn finalize_and_broadcast(
         },
         rpc: traces,
     })
+}
+
+#[derive(Debug)]
+struct LegacySignature {
+    psbt: String,
+    complete: bool,
+}
+
+#[derive(Debug)]
+enum SignerSigningOutcome {
+    SignedAndLocked(LegacySignature),
+    SignedButRelockFailed {
+        signature: LegacySignature,
+        relock_error: String,
+    },
+    SigningFailedAndLocked {
+        signing_error: String,
+    },
+    SigningFailedAndRelockFailed {
+        signing_error: String,
+        relock_error: String,
+    },
+}
+
+fn parse_legacy_signature(
+    previous_psbt: &str,
+    processed: Value,
+) -> Result<LegacySignature, String> {
+    let updated_psbt = processed
+        .get("psbt")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "Bitcoin Core nije vratio ažurirani PSBT.".to_string())?
+        .to_string();
+    if updated_psbt == previous_psbt {
+        return Err(
+            "Signing wallet nije dodao potpis. Bitcoin je siguran i transakcija nije poslana."
+                .into(),
+        );
+    }
+    Ok(LegacySignature {
+        psbt: updated_psbt,
+        complete: processed
+            .get("complete")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+fn classify_signer_signing_outcome(
+    signing_result: Result<LegacySignature, String>,
+    relock_result: Result<(), String>,
+) -> SignerSigningOutcome {
+    match (signing_result, relock_result) {
+        (Ok(signature), Ok(())) => SignerSigningOutcome::SignedAndLocked(signature),
+        (Ok(signature), Err(relock_error)) => SignerSigningOutcome::SignedButRelockFailed {
+            signature,
+            relock_error,
+        },
+        (Err(signing_error), Ok(())) => {
+            SignerSigningOutcome::SigningFailedAndLocked { signing_error }
+        }
+        (Err(signing_error), Err(relock_error)) => {
+            SignerSigningOutcome::SigningFailedAndRelockFailed {
+                signing_error,
+                relock_error,
+            }
+        }
+    }
+}
+
+fn apply_legacy_signature(draft: &mut SpendState, wallet_name: &str, signature: LegacySignature) {
+    draft.psbt = signature.psbt;
+    draft.signed_by.push(wallet_name.to_string());
+    draft.complete = signature.complete;
+}
+
+fn relock_required_state(
+    wallet_name: String,
+    signature_added: bool,
+    signing_error: Option<String>,
+    relock_error: String,
+) -> SignerRelockRequired {
+    SignerRelockRequired {
+        wallet_name,
+        signature_added,
+        signing_error: signing_error.map(|error| sanitize_rpc_text(&error)),
+        relock_error: sanitize_rpc_text(&relock_error),
+    }
+}
+
+fn ensure_legacy_workflow_can_progress(draft: &SpendState) -> Result<(), String> {
+    if let Some(stop) = &draft.relock_required {
+        return Err(format!(
+            "STOP: signer wallet {} nije potvrđeno ponovno zaključan. Daljnje potpisivanje, finalizacija i broadcast blokirani su dok Retry lock ne uspije.",
+            stop.wallet_name
+        ));
+    }
+    Ok(())
 }
 
 async fn verify_signing_wallet(
@@ -1020,6 +1199,19 @@ fn btc_to_sats(value: f64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::ConnectionSettings;
+    use std::{
+        fs,
+        io::{BufRead, BufReader, Read, Write},
+        net::TcpListener,
+        path::PathBuf,
+        thread,
+    };
+
+    struct MockRpcStep {
+        method: &'static str,
+        response: Result<Value, &'static str>,
+    }
 
     fn tpub(seed: char) -> String {
         format!("tpub{}", seed.to_string().repeat(107))
@@ -1108,6 +1300,410 @@ mod tests {
             "mine": { "trusted": 0.00005000, "untrusted_pending": 0.00000189 }
         });
         assert_eq!(btc_to_sats(wallet_balance_btc(&balances)), 5_189);
+    }
+
+    #[test]
+    fn sign_success_and_relock_success_preserves_signature_without_stop() {
+        test_runtime().block_on(async {
+            let state = test_app_state(test_spend_state());
+            let (client, server, cookie_path) = mock_rpc_client(successful_signing_steps(Ok(())));
+
+            let operation = sign_spend_draft(
+                client,
+                &state,
+                "legacy-draft".into(),
+                "CoreVault-K1".into(),
+                "test-only-passphrase".into(),
+            )
+            .await
+            .expect("sign and relock should succeed");
+
+            assert_eq!(operation.data.signed_by, vec!["CoreVault-K1"]);
+            assert!(operation.data.relock_required.is_none());
+            assert!(ensure_legacy_workflow_can_progress(
+                &state.drafts.lock().expect("draft state should lock")["legacy-draft"]
+            )
+            .is_ok());
+            finish_mock(server, cookie_path);
+        });
+    }
+
+    #[test]
+    fn sign_success_and_relock_failure_preserves_signature_and_blocks_progression() {
+        test_runtime().block_on(async {
+            let state = test_app_state(test_spend_state());
+            let (client, server, cookie_path) =
+                mock_rpc_client(successful_signing_steps(Err("wallet lock unavailable")));
+
+            let operation = sign_spend_draft(
+                client,
+                &state,
+                "legacy-draft".into(),
+                "CoreVault-K1".into(),
+                "test-only-passphrase".into(),
+            )
+            .await
+            .expect("relock failure should return preserved workflow state");
+
+            assert_eq!(operation.data.signed_by, vec!["CoreVault-K1"]);
+            let stop = operation
+                .data
+                .relock_required
+                .expect("relock failure should create a hard stop");
+            assert!(stop.signature_added);
+            assert!(stop.signing_error.is_none());
+            assert_eq!(stop.wallet_name, "CoreVault-K1");
+            assert!(stop.relock_error.contains("wallet lock unavailable"));
+            assert_eq!(
+                operation
+                    .rpc
+                    .last()
+                    .expect("walletlock trace should exist")
+                    .method,
+                "walletlock"
+            );
+            finish_mock(server, cookie_path);
+
+            let next_signer_error = sign_spend_draft(
+                unreachable_rpc_client(),
+                &state,
+                "legacy-draft".into(),
+                "CoreVault-K2".into(),
+                "another-passphrase".into(),
+            )
+            .await
+            .expect_err("another signer must be blocked before RPC");
+            assert!(next_signer_error.starts_with("STOP:"));
+
+            let finalize_error =
+                finalize_and_broadcast(unreachable_rpc_client(), &state, "legacy-draft".into())
+                    .await
+                    .expect_err("finalize and broadcast must be blocked before RPC");
+            assert!(finalize_error.starts_with("STOP:"));
+        });
+    }
+
+    #[test]
+    fn sign_failure_and_relock_success_returns_normal_error_without_stop() {
+        test_runtime().block_on(async {
+            let state = test_app_state(test_spend_state());
+            let (client, server, cookie_path) = mock_rpc_client(failed_signing_steps(Ok(())));
+
+            let error = sign_spend_draft(
+                client,
+                &state,
+                "legacy-draft".into(),
+                "CoreVault-K1".into(),
+                "test-only-passphrase".into(),
+            )
+            .await
+            .expect_err("signing error should be returned normally");
+
+            assert!(error.contains("signing refused"));
+            let draft = state.drafts.lock().expect("draft state should lock");
+            assert!(draft["legacy-draft"].signed_by.is_empty());
+            assert!(draft["legacy-draft"].relock_required.is_none());
+            assert!(ensure_legacy_workflow_can_progress(&draft["legacy-draft"]).is_ok());
+            drop(draft);
+            finish_mock(server, cookie_path);
+        });
+    }
+
+    #[test]
+    fn sign_failure_and_relock_failure_records_both_facts_and_stops() {
+        test_runtime().block_on(async {
+            let state = test_app_state(test_spend_state());
+            let (client, server, cookie_path) =
+                mock_rpc_client(failed_signing_steps(Err("wallet lock unavailable")));
+
+            let operation = sign_spend_draft(
+                client,
+                &state,
+                "legacy-draft".into(),
+                "CoreVault-K1".into(),
+                "test-only-passphrase".into(),
+            )
+            .await
+            .expect("combined failure should return its hard-stop state");
+
+            assert!(operation.data.signed_by.is_empty());
+            let stop = operation
+                .data
+                .relock_required
+                .expect("combined failure should create a hard stop");
+            assert!(!stop.signature_added);
+            assert!(stop
+                .signing_error
+                .as_deref()
+                .is_some_and(|error| error.contains("signing refused")));
+            assert!(stop.relock_error.contains("wallet lock unavailable"));
+            assert!(ensure_legacy_workflow_can_progress(
+                &state.drafts.lock().expect("draft state should lock")["legacy-draft"]
+            )
+            .is_err());
+            finish_mock(server, cookie_path);
+        });
+    }
+
+    #[test]
+    fn unlock_failure_does_not_sign_relock_or_create_a_false_stop() {
+        test_runtime().block_on(async {
+            let state = test_app_state(test_spend_state());
+            let (client, server, cookie_path) = mock_rpc_client(vec![
+                signet_step(),
+                encrypted_wallet_step(),
+                rpc_error("walletpassphrase", "incorrect passphrase"),
+            ]);
+
+            let error = sign_spend_draft(
+                client,
+                &state,
+                "legacy-draft".into(),
+                "CoreVault-K1".into(),
+                "wrong-passphrase".into(),
+            )
+            .await
+            .expect_err("unlock failure should stop before signing");
+
+            assert!(error.contains("incorrect passphrase"));
+            let draft = state.drafts.lock().expect("draft state should lock");
+            assert!(draft["legacy-draft"].signed_by.is_empty());
+            assert!(draft["legacy-draft"].relock_required.is_none());
+            drop(draft);
+            finish_mock(server, cookie_path);
+        });
+    }
+
+    #[test]
+    fn retry_lock_success_clears_only_stop_and_preserves_signature() {
+        test_runtime().block_on(async {
+            let state = test_app_state(stopped_spend_state(true));
+            let (client, server, cookie_path) =
+                mock_rpc_client(vec![rpc_ok("walletlock", Value::Null)]);
+
+            let operation = retry_signer_lock(client, &state, "legacy-draft".into())
+                .await
+                .expect("retry lock should return updated state");
+
+            assert!(operation.data.relock_required.is_none());
+            assert_eq!(operation.data.signed_by, vec!["CoreVault-K1"]);
+            assert_eq!(operation.rpc.len(), 1);
+            assert_eq!(operation.rpc[0].method, "walletlock");
+            assert_eq!(operation.rpc[0].wallet.as_deref(), Some("CoreVault-K1"));
+            assert!(ensure_legacy_workflow_can_progress(
+                &state.drafts.lock().expect("draft state should lock")["legacy-draft"]
+            )
+            .is_ok());
+            finish_mock(server, cookie_path);
+        });
+    }
+
+    #[test]
+    fn retry_lock_failure_keeps_stop_and_preserves_signature() {
+        test_runtime().block_on(async {
+            let state = test_app_state(stopped_spend_state(true));
+            let (client, server, cookie_path) =
+                mock_rpc_client(vec![rpc_error("walletlock", "wallet still cannot lock")]);
+
+            let operation = retry_signer_lock(client, &state, "legacy-draft".into())
+                .await
+                .expect("retry failure should return the retained hard-stop state");
+
+            assert_eq!(operation.data.signed_by, vec!["CoreVault-K1"]);
+            let stop = operation
+                .data
+                .relock_required
+                .expect("stop must remain after failed retry");
+            assert!(stop.relock_error.contains("wallet still cannot lock"));
+            assert!(ensure_legacy_workflow_can_progress(
+                &state.drafts.lock().expect("draft state should lock")["legacy-draft"]
+            )
+            .is_err());
+            finish_mock(server, cookie_path);
+        });
+    }
+
+    fn successful_signing_steps(relock: Result<(), &'static str>) -> Vec<MockRpcStep> {
+        let mut steps = vec![
+            signet_step(),
+            encrypted_wallet_step(),
+            rpc_ok("walletpassphrase", Value::Null),
+            rpc_ok(
+                "walletprocesspsbt",
+                json!({ "psbt": "signed-test-psbt", "complete": false }),
+            ),
+        ];
+        steps.push(match relock {
+            Ok(()) => rpc_ok("walletlock", Value::Null),
+            Err(error) => rpc_error("walletlock", error),
+        });
+        steps
+    }
+
+    fn failed_signing_steps(relock: Result<(), &'static str>) -> Vec<MockRpcStep> {
+        let mut steps = vec![
+            signet_step(),
+            encrypted_wallet_step(),
+            rpc_ok("walletpassphrase", Value::Null),
+            rpc_error("walletprocesspsbt", "signing refused"),
+        ];
+        steps.push(match relock {
+            Ok(()) => rpc_ok("walletlock", Value::Null),
+            Err(error) => rpc_error("walletlock", error),
+        });
+        steps
+    }
+
+    fn signet_step() -> MockRpcStep {
+        rpc_ok("getblockchaininfo", json!({ "chain": "signet" }))
+    }
+
+    fn encrypted_wallet_step() -> MockRpcStep {
+        rpc_ok(
+            "getwalletinfo",
+            json!({
+                "descriptors": true,
+                "private_keys_enabled": true,
+                "unlocked_until": 0
+            }),
+        )
+    }
+
+    fn rpc_ok(method: &'static str, result: Value) -> MockRpcStep {
+        MockRpcStep {
+            method,
+            response: Ok(result),
+        }
+    }
+
+    fn rpc_error(method: &'static str, message: &'static str) -> MockRpcStep {
+        MockRpcStep {
+            method,
+            response: Err(message),
+        }
+    }
+
+    fn test_spend_state() -> SpendState {
+        SpendState {
+            coordinator_name: "CoreVault-2of3".into(),
+            destination: "tb1qtestdestination".into(),
+            amount_sats: 5_000,
+            starting_balance_sats: 10_000,
+            fee_btc: 0.000001,
+            psbt: "unsigned-test-psbt".into(),
+            signed_by: Vec::new(),
+            complete: false,
+            relock_required: None,
+        }
+    }
+
+    fn stopped_spend_state(signature_added: bool) -> SpendState {
+        let mut draft = test_spend_state();
+        if signature_added {
+            draft.psbt = "signed-test-psbt".into();
+            draft.signed_by.push("CoreVault-K1".into());
+        }
+        draft.relock_required = Some(SignerRelockRequired {
+            wallet_name: "CoreVault-K1".into(),
+            signature_added,
+            signing_error: None,
+            relock_error: "initial lock failure".into(),
+        });
+        draft
+    }
+
+    fn test_app_state(draft: SpendState) -> AppState {
+        let state = AppState::default();
+        state
+            .drafts
+            .lock()
+            .expect("draft state should lock")
+            .insert("legacy-draft".into(), draft);
+        state
+    }
+
+    fn unreachable_rpc_client() -> RpcClient {
+        RpcClient::new(ConnectionSettings {
+            host: "127.0.0.1".into(),
+            port: 1,
+            cookie_path: std::env::temp_dir()
+                .join("core-vault-unreachable-legacy-test.cookie")
+                .to_string_lossy()
+                .into_owned(),
+        })
+        .expect("unreachable client settings should be valid")
+    }
+
+    fn test_runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("build async test runtime")
+    }
+
+    fn mock_rpc_client(steps: Vec<MockRpcStep>) -> (RpcClient, thread::JoinHandle<()>, PathBuf) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback mock RPC");
+        let port = listener.local_addr().expect("mock address").port();
+        let cookie_path = std::env::temp_dir().join(format!(
+            "core-vault-legacy-relock-test-{}-{port}.cookie",
+            std::process::id()
+        ));
+        fs::write(&cookie_path, "user:pass\n").expect("write mock cookie");
+
+        let server = thread::spawn(move || {
+            for step in steps {
+                let (mut stream, _) = listener.accept().expect("accept mock RPC request");
+                let mut reader = BufReader::new(stream.try_clone().expect("clone mock stream"));
+                let mut content_length = 0usize;
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).expect("read request header");
+                    if line == "\r\n" || line.is_empty() {
+                        break;
+                    }
+                    let lower = line.to_ascii_lowercase();
+                    if let Some(value) = lower.strip_prefix("content-length:") {
+                        content_length = value.trim().parse().expect("parse content length");
+                    }
+                }
+                let mut body = vec![0u8; content_length];
+                reader.read_exact(&mut body).expect("read request body");
+                let request: Value = serde_json::from_slice(&body).expect("parse RPC request");
+                assert_eq!(
+                    request.get("method").and_then(Value::as_str),
+                    Some(step.method),
+                    "unexpected RPC sequence"
+                );
+
+                let (result, error) = match step.response {
+                    Ok(result) => (result, Value::Null),
+                    Err(message) => (Value::Null, json!({ "code": -1, "message": message })),
+                };
+                let response_body =
+                    json!({ "result": result, "error": error, "id": "core-vault-ui" }).to_string();
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    response_body.len(),
+                    response_body
+                )
+                .expect("write mock RPC response");
+            }
+        });
+
+        let client = RpcClient::new(ConnectionSettings {
+            host: "127.0.0.1".into(),
+            port,
+            cookie_path: cookie_path.to_string_lossy().into_owned(),
+        })
+        .expect("loopback client settings should be valid");
+        (client, server, cookie_path)
+    }
+
+    fn finish_mock(server: thread::JoinHandle<()>, cookie_path: PathBuf) {
+        server.join().expect("mock RPC server should finish");
+        let _ = fs::remove_file(cookie_path);
     }
 
     fn test_key_set(branch: u8) -> Vec<(String, String, DescriptorKey)> {

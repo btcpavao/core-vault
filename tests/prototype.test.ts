@@ -124,6 +124,7 @@ describe("prototype architecture invariants", () => {
       "get_receive_snapshot",
       "create_spend_draft",
       "sign_spend_draft",
+      "retry_signer_lock",
       "finalize_and_broadcast",
     ]) {
       expect(main).toContain(command);

@@ -152,6 +152,7 @@ function App() {
     Boolean(receive),
     spendStage,
     draft?.signedBy.length,
+    Boolean(draft?.relockRequired),
     Boolean(broadcast),
   ]);
 
@@ -332,6 +333,24 @@ function App() {
     }
   };
 
+  const handleRetrySignerLock = async () => {
+    if (!draft?.relockRequired) return;
+    setBusy("retry-signer-lock");
+    setError(null);
+    try {
+      const operation = await coreApi.retrySignerLock(draft.draftId);
+      const updated = append(operation);
+      setDraft(updated);
+      if (updated.relockRequired) {
+        setError("Bitcoin Core still did not confirm that the signer wallet was re-locked. Transaction progression remains paused.");
+      }
+    } catch (reason) {
+      setError(formatError(reason));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleBroadcast = async () => {
     if (!draft) return;
     setBusy("broadcast");
@@ -485,6 +504,7 @@ function App() {
               onEdit={() => setSpendStage("compose")}
               onSelectSigner={setSelectedSigner}
               onSign={handleSign}
+              onRetrySignerLock={handleRetrySignerLock}
               onBroadcast={handleBroadcast}
             />
           )}
@@ -748,6 +768,7 @@ function SpendStep({
   onEdit,
   onSelectSigner,
   onSign,
+  onRetrySignerLock,
   onBroadcast,
 }: {
   stage: "compose" | "review" | "sign" | "sent";
@@ -768,6 +789,7 @@ function SpendStep({
   onEdit: () => void;
   onSelectSigner: (value: string | null) => void;
   onSign: (walletName: string, passphrase: string) => Promise<void>;
+  onRetrySignerLock: () => Promise<void>;
   onBroadcast: () => void;
 }) {
   if (stage === "compose") {
@@ -792,10 +814,38 @@ function SpendStep({
     );
   }
   return (
-    <section className="step-screen"><StepHeader eyebrow="Add signature" title={draft.complete ? "Two approvals collected" : draft.signedBy.length === 1 ? "Transaction needs one more signature" : "Choose the first signing wallet"}><p>{draft.complete ? "Review the transaction once more before local broadcast." : "Each approval is added by Bitcoin Core. Core Vault never receives a private key."}</p></StepHeader><TransactionReview draft={draft} remaining={remaining} compact />
-      <div className="signer-slots">{signers.map((signer) => { const signed = draft.signedBy.includes(signer.name); const selected = selectedSigner === signer.name; return <div className={`signer-slot ${signed ? "is-signed" : ""} ${selected ? "is-selected" : ""}`} key={signer.label}><div className="slot-main"><span className="signer-icon-small">{signed ? <Check size={17} /> : <KeyRound size={17} />}</span><div><strong>{signer.label} · {signer.name}</strong><small>{signed ? "Signature added" : "Local Bitcoin Core wallet"}</small></div></div>{signed ? <span className="slot-status"><CheckCircle2 size={16} />Signed</span> : <button className="button button-secondary" disabled={draft.complete || busy !== null} onClick={() => onSelectSigner(selected ? null : signer.name)}>Add signature</button>}{selected && !signed && <SignerPassword walletName={signer.name} busy={busy} onCancel={() => onSelectSigner(null)} onSign={onSign} />}</div>; })}</div>
-      {draft.complete && <SecurityNotice level="warning" title="Broadcast is the final action"><p>Bitcoin Core will send this transaction to the Signet network. Amount, destination and fee can no longer be changed without creating a new transaction.</p></SecurityNotice>}
-      {draft.complete && <div className="step-actions"><button className="button button-primary" onClick={onBroadcast} disabled={busy !== null}>{busy === "broadcast" ? "Finalizing and broadcasting…" : "Broadcast on Signet"}</button></div>}
+    <section className="step-screen">
+      <StepHeader
+        eyebrow="Add signature"
+        title={draft.relockRequired
+          ? "Signer wallet lock needs attention"
+          : draft.complete
+            ? "Two approvals collected"
+            : draft.signedBy.length === 1
+              ? "Transaction needs one more signature"
+              : "Choose the first signing wallet"}
+      >
+        <p>{draft.relockRequired
+          ? "Core Vault has paused signing and transaction progression until Bitcoin Core confirms the signer wallet is locked again."
+          : draft.complete
+            ? "Review the transaction once more before local broadcast."
+            : "Each approval is added by Bitcoin Core. Core Vault never receives a private key."}</p>
+      </StepHeader>
+      <TransactionReview draft={draft} remaining={remaining} compact />
+      <div className="signer-slots">{signers.map((signer) => { const signed = draft.signedBy.includes(signer.name); const selected = selectedSigner === signer.name; return <div className={`signer-slot ${signed ? "is-signed" : ""} ${selected ? "is-selected" : ""}`} key={signer.label}><div className="slot-main"><span className="signer-icon-small">{signed ? <Check size={17} /> : <KeyRound size={17} />}</span><div><strong>{signer.label} · {signer.name}</strong><small>{signed ? "Signature added" : "Local Bitcoin Core wallet"}</small></div></div>{signed ? <span className="slot-status"><CheckCircle2 size={16} />Signed</span> : <button className="button button-secondary" disabled={draft.complete || Boolean(draft.relockRequired) || busy !== null} onClick={() => onSelectSigner(selected ? null : signer.name)}>Add signature</button>}{selected && !signed && !draft.relockRequired && <SignerPassword walletName={signer.name} busy={busy} onCancel={() => onSelectSigner(null)} onSign={onSign} />}</div>; })}</div>
+      {draft.relockRequired && (
+        <SecurityNotice level="warning" title="Signer wallet could not be re-locked">
+          <p>{draft.relockRequired.signatureAdded
+            ? `The signature from ${draft.relockRequired.walletName} was added and remains preserved, but Bitcoin Core did not confirm that this signer wallet was re-locked.`
+            : `No signature from ${draft.relockRequired.walletName} was added, and Bitcoin Core also did not confirm that this signer wallet was re-locked.`}</p>
+          {draft.relockRequired.signingError && <p>Signing also failed: {draft.relockRequired.signingError}</p>}
+          <p>Further signing, finalization and broadcast are paused. The wallet may remain temporarily unlocked until Bitcoin Core's five-second unlock timeout expires.</p>
+          <p>Bitcoin Core response: {draft.relockRequired.relockError}</p>
+          <button className="button button-primary" onClick={() => void onRetrySignerLock()} disabled={busy !== null}>{busy === "retry-signer-lock" ? "Retrying lock…" : "Retry lock"}</button>
+        </SecurityNotice>
+      )}
+      {draft.complete && !draft.relockRequired && <SecurityNotice level="warning" title="Broadcast is the final action"><p>Bitcoin Core will send this transaction to the Signet network. Amount, destination and fee can no longer be changed without creating a new transaction.</p></SecurityNotice>}
+      {draft.complete && !draft.relockRequired && <div className="step-actions"><button className="button button-primary" onClick={onBroadcast} disabled={busy !== null}>{busy === "broadcast" ? "Finalizing and broadcasting…" : "Broadcast on Signet"}</button></div>}
     </section>
   );
 }

@@ -393,6 +393,14 @@ async fn sign_spend_draft(
 }
 
 #[tauri::command]
+async fn retry_signer_lock(
+    state: State<'_, AppState>,
+    draft_id: String,
+) -> Result<Operation<SpendDraftView>, String> {
+    vault::retry_signer_lock(client_from_state(&state)?, &state, draft_id).await
+}
+
+#[tauri::command]
 async fn finalize_and_broadcast(
     state: State<'_, AppState>,
     draft_id: String,
@@ -433,6 +441,7 @@ fn main() {
             get_receive_snapshot,
             create_spend_draft,
             sign_spend_draft,
+            retry_signer_lock,
             finalize_and_broadcast
         ])
         .run(tauri::generate_context!())

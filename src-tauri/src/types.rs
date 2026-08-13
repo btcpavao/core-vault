@@ -350,6 +350,16 @@ pub struct SpendDraftView {
     pub fee_sats: u64,
     pub signed_by: Vec<String>,
     pub complete: bool,
+    pub relock_required: Option<SignerRelockRequired>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SignerRelockRequired {
+    pub wallet_name: String,
+    pub signature_added: bool,
+    pub signing_error: Option<String>,
+    pub relock_error: String,
 }
 
 #[derive(Clone, Debug)]
@@ -362,6 +372,7 @@ pub struct SpendState {
     pub psbt: String,
     pub signed_by: Vec<String>,
     pub complete: bool,
+    pub relock_required: Option<SignerRelockRequired>,
 }
 
 impl SpendState {
@@ -374,6 +385,7 @@ impl SpendState {
             fee_sats: (self.fee_btc * 100_000_000.0).round() as u64,
             signed_by: self.signed_by.clone(),
             complete: self.complete,
+            relock_required: self.relock_required.clone(),
         }
     }
 }

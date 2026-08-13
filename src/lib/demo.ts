@@ -145,6 +145,7 @@ export const demoSpend = (signedBy: string[] = []): Operation<SpendDraft> => ({
     feeSats: 189,
     signedBy,
     complete: signedBy.length >= 2,
+    relockRequired: null,
   },
   rpc: [
     trace(signedBy.length ? "walletprocesspsbt" : "walletcreatefundedpsbt", signedBy.length ? "Bitcoin Core dodaje lokalni potpis." : "Coordinator priprema transakciju bez potpisa.", {

@@ -134,6 +134,8 @@ export const coreApi = {
       walletName,
       passphrase,
     }),
+  retrySignerLock: (draftId: string) =>
+    invoke<Operation<SpendDraft>>("retry_signer_lock", { draftId }),
   broadcast: (draftId: string) =>
     invoke<Operation<BroadcastResult>>("finalize_and_broadcast", { draftId }),
 };
