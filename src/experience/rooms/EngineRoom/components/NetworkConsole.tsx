@@ -21,21 +21,18 @@ export function NetworkConsole({ visualState, focused, onFocus }: NetworkConsole
 
   return (
     <group position={[-4.25, 0, -1.55]} rotation={[0, 0.28, 0]}>
-      <mesh position={[0, 0.24, 0]} castShadow receiveShadow>
-        <boxGeometry args={[2.55, 0.5, 1.7]} />
-        <LimestoneMaterial tone="shadow" />
-      </mesh>
-      <mesh position={[0, 0.57, 0]} castShadow receiveShadow>
-        <boxGeometry args={[2.18, 0.18, 1.42]} />
+      <RoundedBox args={[2.55, 0.5, 1.7]} radius={0.07} smoothness={3} position={[0, 0.24, 0]} castShadow receiveShadow>
+        <LimestoneMaterial tone="shadow" surface="hero" />
+      </RoundedBox>
+      <RoundedBox args={[2.18, 0.18, 1.42]} radius={0.045} smoothness={3} position={[0, 0.57, 0]} castShadow receiveShadow>
         <BronzeMaterial finish="structural" />
-      </mesh>
+      </RoundedBox>
       <RoundedBox args={[2.06, 0.92, 1.3]} radius={0.08} smoothness={3} position={[0, 1.03, -0.08]} castShadow>
         <BronzeMaterial finish="dark" />
       </RoundedBox>
-      <mesh position={[0, 1.55, 0.06]} rotation={[-0.24, 0, 0]} castShadow>
-        <boxGeometry args={[1.82, 0.13, 0.92]} />
+      <RoundedBox args={[1.82, 0.13, 0.92]} radius={0.035} smoothness={3} position={[0, 1.55, 0.06]} rotation={[-0.24, 0, 0]} castShadow>
         <BronzeMaterial finish="precision" />
-      </mesh>
+      </RoundedBox>
       <mesh position={[0, 1.62, 0.11]} rotation={[-0.24, 0, 0]}>
         <planeGeometry args={[1.48, 0.59]} />
         <EnergyMaterial connection={visualState.connection} active={active} intensity={0.72} />

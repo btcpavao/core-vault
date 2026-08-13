@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { coreApi, isTauriRuntime } from "../lib/tauri";
-import type { CoreStatus } from "../types";
+import type { ConnectionSettings, CoreStatus } from "../types";
 
 export interface NodeStatusReadState {
   status: CoreStatus | null;
@@ -8,7 +8,17 @@ export interface NodeStatusReadState {
   message: string | null;
 }
 
-const REFRESH_INTERVAL_MS = 5_000;
+const qaCookiePath = import.meta.env.DEV
+  ? import.meta.env.VITE_CORE_QA_COOKIE_PATH
+  : undefined;
+const qaPort = import.meta.env.DEV
+  ? Number(import.meta.env.VITE_CORE_QA_PORT)
+  : Number.NaN;
+const QA_CONNECTION_SETTINGS: ConnectionSettings | null =
+  qaCookiePath && Number.isInteger(qaPort)
+    ? { host: "127.0.0.1", port: qaPort, cookiePath: qaCookiePath }
+    : null;
+const REFRESH_INTERVAL_MS = QA_CONNECTION_SETTINGS ? 250 : 5_000;
 
 const errorMessage = (cause: unknown) =>
   cause instanceof Error ? cause.message : String(cause);
@@ -39,7 +49,9 @@ export function useNodeStatus(): NodeStatusReadState {
       try {
         const operation = currentStatus?.connected
           ? await coreApi.status()
-          : await coreApi.discover();
+          : QA_CONNECTION_SETTINGS
+            ? await coreApi.connect(QA_CONNECTION_SETTINGS)
+            : await coreApi.discover();
 
         currentStatus = operation.data;
         if (active) {

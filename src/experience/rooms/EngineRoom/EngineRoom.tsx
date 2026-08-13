@@ -12,6 +12,7 @@ import { RoomArchitecture } from "./components/RoomArchitecture";
 
 interface EngineRoomProps {
   visualState: EngineRoomVisualState;
+  validationPulseSerial: number;
   focus: SpatialFocusTarget;
   reducedMotion: boolean;
   onFocus: (target: Exclude<SpatialFocusTarget, "overview">) => void;
@@ -54,27 +55,27 @@ const StaticRoomLayer = memo(function StaticRoomLayer({
 
 function MaterialEnvironment() {
   return (
-    <Environment background={false} frames={1} resolution={64}>
+    <Environment background={false} frames={1} resolution={256}>
       <Lightformer
         form="rect"
-        color="#f0d7b1"
-        intensity={1.15}
+        color="#fff1d2"
+        intensity={2.2}
         position={[4, 5, 5]}
         rotation={[0, -0.65, 0]}
-        scale={[5, 3, 1]}
+        scale={[7, 4, 1]}
       />
       <Lightformer
         form="rect"
-        color="#b9d0d0"
-        intensity={0.58}
+        color="#c9e7ef"
+        intensity={1.18}
         position={[-4, 2.5, 4]}
         rotation={[0, 0.7, 0]}
-        scale={[3, 4, 1]}
+        scale={[4, 5, 1]}
       />
       <Lightformer
         form="ring"
-        color="#eee3cc"
-        intensity={0.42}
+        color="#fff4df"
+        intensity={0.82}
         position={[0, 6, -4]}
         rotation={[Math.PI / 2, 0, 0]}
         scale={[2.5, 2.5, 1]}
@@ -93,12 +94,12 @@ function RoomLighting({ visualState }: { visualState: EngineRoomVisualState }) {
 
   return (
     <>
-      <ambientLight intensity={0.54} color="#c8c0ae" />
-      <hemisphereLight args={["#dce6df", "#504638", 1.62]} />
+      <ambientLight intensity={0.46} color="#e9e1d3" />
+      <hemisphereLight args={["#e7f4f3", "#8d7a61", 1.42]} />
       <directionalLight
         position={[8.5, 12, 10]}
-        intensity={1.95}
-        color="#f2d3a7"
+        intensity={1.9}
+        color="#ffe0ad"
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
@@ -110,16 +111,32 @@ function RoomLighting({ visualState }: { visualState: EngineRoomVisualState }) {
         shadow-camera-bottom={-8}
         shadow-bias={-0.0002}
         shadow-normalBias={0.025}
-        shadow-radius={7}
+        shadow-radius={10}
       />
       <spotLight
         position={[-5, 6, 3.5]}
         target-position={[-2.5, 0, -2]}
-        intensity={16}
+        intensity={11}
         distance={18}
         angle={0.5}
         penumbra={0.85}
         color="#b6d5d7"
+      />
+      <rectAreaLight
+        position={[-5.4, 3.5, 1.9]}
+        rotation={[0, Math.PI / 2.6, 0]}
+        width={5.8}
+        height={4.4}
+        color="#cfedf0"
+        intensity={3.2}
+      />
+      <rectAreaLight
+        position={[4.8, 3.2, 2.5]}
+        rotation={[0, -Math.PI / 2.9, 0]}
+        width={5.2}
+        height={3.8}
+        color="#ffe1b2"
+        intensity={2.8}
       />
       <pointLight
         position={[0, 2.15, -0.72]}
@@ -135,6 +152,7 @@ function RoomLighting({ visualState }: { visualState: EngineRoomVisualState }) {
 
 function EngineRoomComponent({
   visualState,
+  validationPulseSerial,
   focus,
   reducedMotion,
   onFocus,
@@ -145,8 +163,8 @@ function EngineRoomComponent({
 
   return (
     <>
-      <color attach="background" args={["#24343b"]} />
-      <fog attach="fog" args={["#2d4148", 17, 34]} />
+      <color attach="background" args={["#9ebfc8"]} />
+      <fog attach="fog" args={["#b5c9c8", 18, 37]} />
       <CuratedCameraRig focus={focus} reducedMotion={reducedMotion} />
       <MaterialEnvironment />
       <RoomLighting visualState={visualState} />
@@ -174,6 +192,7 @@ function EngineRoomComponent({
       />
       <CoreReactor
         visualState={visualState}
+        validationPulseSerial={validationPulseSerial}
         focused={focus === "reactor"}
         reducedMotion={reducedMotion}
         onFocus={() => onFocus("reactor")}

@@ -2,7 +2,10 @@ import { useRef, useState, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import type { Group, MeshStandardMaterial } from "three";
 import type { EngineRoomVisualState } from "../../adapters/nodeVisualState";
+import { deriveReactorEnergyState } from "../../energy/reactorEnergyState";
 import { SpatialHitTarget } from "../../interaction/SpatialHitTarget";
+import { ReactorEnergyField } from "./components/ReactorEnergyField";
+import { BeveledCylinder } from "./components/BeveledCylinder";
 import {
   BronzeMaterial,
   EnergyMaterial,
@@ -12,6 +15,7 @@ import {
 
 interface CoreReactorProps {
   visualState: EngineRoomVisualState;
+  validationPulseSerial: number;
   focused: boolean;
   reducedMotion: boolean;
   onFocus: () => void;
@@ -20,18 +24,38 @@ interface CoreReactorProps {
 function ReactorFoundation() {
   return (
     <group>
-      <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[2.02, 2.22, 0.36, 56]} />
-        <LimestoneMaterial tone="base" />
-      </mesh>
-      <mesh position={[0, 0.43, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[1.7, 1.87, 0.22, 56]} />
+      <BeveledCylinder
+        position={[0, 0.18, 0]}
+        radiusTop={2.02}
+        radiusBottom={2.22}
+        height={0.36}
+        bevel={0.075}
+        castShadow
+        receiveShadow
+      >
+        <LimestoneMaterial tone="base" surface="hero" />
+      </BeveledCylinder>
+      <BeveledCylinder
+        position={[0, 0.43, 0]}
+        radiusTop={1.7}
+        radiusBottom={1.87}
+        height={0.22}
+        bevel={0.045}
+        castShadow
+        receiveShadow
+      >
         <BronzeMaterial finish="structural" />
-      </mesh>
-      <mesh position={[0, 0.58, 0]} castShadow>
-        <cylinderGeometry args={[1.42, 1.55, 0.14, 48]} />
+      </BeveledCylinder>
+      <BeveledCylinder
+        position={[0, 0.58, 0]}
+        radiusTop={1.42}
+        radiusBottom={1.55}
+        height={0.14}
+        bevel={0.025}
+        castShadow
+      >
         <BronzeMaterial finish="precision" />
-      </mesh>
+      </BeveledCylinder>
       {Array.from({ length: 12 }, (_, index) => {
         const angle = (index / 12) * Math.PI * 2;
         return (
@@ -58,6 +82,12 @@ function ReactorCage() {
           <BronzeMaterial finish={index === 1 || index === 2 ? "precision" : "structural"} />
         </mesh>
       ))}
+      {[0.79, 1.61, 2.71, 3.48].map((height) => (
+        <mesh key={`gasket-${height}`} position={[0, height, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[1.015, 0.025, 8, 56]} />
+          <BronzeMaterial finish="dark" />
+        </mesh>
+      ))}
       {Array.from({ length: 8 }, (_, index) => {
         const angle = (index / 8) * Math.PI * 2;
         return (
@@ -72,14 +102,44 @@ function ReactorCage() {
           </mesh>
         );
       })}
-      <mesh position={[0, 3.75, 0]} castShadow>
-        <cylinderGeometry args={[0.75, 1.03, 0.34, 48]} />
+      {[0.78, 3.5].flatMap((height) =>
+        Array.from({ length: 8 }, (_, index) => {
+          const angle = (index / 8) * Math.PI * 2;
+          return (
+            <mesh
+              key={`collar-bolt-${height}-${index}`}
+              position={[Math.cos(angle) * 1.09, height, Math.sin(angle) * 1.09]}
+              rotation={[0, -angle, Math.PI / 2]}
+              castShadow
+            >
+              <cylinderGeometry args={[0.034, 0.034, 0.045, 8]} />
+              <BronzeMaterial finish="dark" />
+            </mesh>
+          );
+        }),
+      )}
+      <BeveledCylinder
+        position={[0, 3.75, 0]}
+        radiusTop={0.75}
+        radiusBottom={1.03}
+        height={0.34}
+        bevel={0.055}
+        segments={56}
+        castShadow
+      >
         <BronzeMaterial finish="structural" />
-      </mesh>
-      <mesh position={[0, 4.01, 0]} castShadow>
-        <cylinderGeometry args={[0.39, 0.58, 0.2, 32]} />
+      </BeveledCylinder>
+      <BeveledCylinder
+        position={[0, 4.01, 0]}
+        radiusTop={0.39}
+        radiusBottom={0.58}
+        height={0.2}
+        bevel={0.04}
+        segments={48}
+        castShadow
+      >
         <BronzeMaterial finish="precision" />
-      </mesh>
+      </BeveledCylinder>
       <mesh position={[0, 4.18, 0]} castShadow>
         <cylinderGeometry args={[0.12, 0.12, 0.2, 20]} />
         <BronzeMaterial finish="dark" />
@@ -106,8 +166,7 @@ function ComputationalCore({
           ref={energyMaterialRef}
           connection={visualState.connection}
           active={online}
-          intensity={visualState.activity === "syncing" ? 1.5 : 1.14}
-          highlight
+          intensity={visualState.activity === "syncing" ? 1.12 : 0.78}
         />
       </mesh>
       {[-0.78, 0, 0.78].map((offset, ringIndex) => (
@@ -182,6 +241,7 @@ function ReactorConnectors({ visualState }: { visualState: EngineRoomVisualState
 
 export function CoreReactor({
   visualState,
+  validationPulseSerial,
   focused,
   reducedMotion,
   onFocus,
@@ -192,7 +252,8 @@ export function CoreReactor({
   const [hovered, setHovered] = useState(false);
   const online = visualState.connection === "online";
   const networkActive = online && visualState.networkActive === true;
-  const baseEnergy = online ? (visualState.activity === "syncing" ? 1.5 : 1.14) : 0.035;
+  const energyState = deriveReactorEnergyState(visualState);
+  const baseEnergy = online ? (visualState.activity === "syncing" ? 1.12 : 0.78) : 0.035;
 
   useFrame(({ clock }, delta) => {
     if (reducedMotion) {
@@ -218,9 +279,18 @@ export function CoreReactor({
       <group ref={innerAssemblyRef}>
         <ComputationalCore visualState={visualState} energyMaterialRef={energyMaterialRef} />
       </group>
+      <ReactorEnergyField
+        energyState={energyState}
+        pulseSerial={validationPulseSerial}
+        reducedMotion={reducedMotion}
+      />
       <mesh position={[0, 2.12, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.98, 0.98, 2.95, 48, 1, true]} />
-        <TechnicalGlassMaterial opacity={0.26} />
+        <cylinderGeometry args={[0.99, 0.99, 2.95, 72, 1, true]} />
+        <TechnicalGlassMaterial opacity={0.2} />
+      </mesh>
+      <mesh position={[0, 2.12, 0]} receiveShadow>
+        <cylinderGeometry args={[0.945, 0.945, 2.87, 72, 1, true]} />
+        <TechnicalGlassMaterial opacity={0.075} />
       </mesh>
       <ReactorCage />
       <ReactorConnectors visualState={visualState} />

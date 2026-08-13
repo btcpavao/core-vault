@@ -11,17 +11,17 @@ import { WORLD_TEXTURES } from "./proceduralTextures";
 
 export const WORLD_MATERIALS = {
   limestone: {
-    pale: "#e5dece",
-    base: "#cabea7",
-    shadow: "#928775",
-    inset: "#625f57",
+    pale: "#f1eadb",
+    base: "#ddd0b8",
+    shadow: "#b5a891",
+    inset: "#8b8171",
   },
   bronze: {
-    structural: "#745945",
-    precision: "#92704c",
-    dark: "#403731",
+    structural: "#c38d50",
+    precision: "#dfad69",
+    dark: "#665140",
   },
-  technicalGlass: "#c3d2cd",
+  technicalGlass: "#d8f0ee",
   energy: {
     active: "#3da8ce",
     highlight: "#c7edf3",
@@ -32,9 +32,10 @@ export const WORLD_MATERIALS = {
 
 type LimestoneTone = keyof typeof WORLD_MATERIALS.limestone;
 type BronzeFinish = keyof typeof WORLD_MATERIALS.bronze;
-export type LimestoneSurface = "architectural" | "floor";
+export type LimestoneSurface = "architectural" | "hero" | "floor";
 
 const STONE_NORMAL_SCALE = new Vector2(0.11, 0.11);
+const HERO_STONE_NORMAL_SCALE = new Vector2(0.18, 0.18);
 const FLOOR_NORMAL_SCALE = new Vector2(0.14, 0.14);
 const BRONZE_NORMAL_SCALE = {
   structural: new Vector2(0.13, 0.06),
@@ -49,7 +50,12 @@ export function LimestoneMaterial({
   tone?: LimestoneTone;
   surface?: LimestoneSurface;
 }) {
-  const textures = surface === "floor" ? WORLD_TEXTURES.floor : WORLD_TEXTURES.limestone;
+  const textures =
+    surface === "floor"
+      ? WORLD_TEXTURES.floor
+      : surface === "hero"
+        ? WORLD_TEXTURES.limestoneHero
+        : WORLD_TEXTURES.limestone;
 
   return (
     <meshStandardMaterial
@@ -57,10 +63,16 @@ export function LimestoneMaterial({
       map={textures.baseColor}
       roughnessMap={textures.roughness}
       normalMap={textures.normal}
-      normalScale={surface === "floor" ? FLOOR_NORMAL_SCALE : STONE_NORMAL_SCALE}
+      normalScale={
+        surface === "floor"
+          ? FLOOR_NORMAL_SCALE
+          : surface === "hero"
+            ? HERO_STONE_NORMAL_SCALE
+            : STONE_NORMAL_SCALE
+      }
       metalness={0.01}
-      roughness={tone === "pale" ? 0.9 : 0.97}
-      envMapIntensity={0.58}
+      roughness={tone === "pale" ? 0.82 : tone === "inset" ? 0.94 : 0.88}
+      envMapIntensity={surface === "architectural" ? 0.7 : 0.88}
     />
   );
 }
@@ -74,9 +86,9 @@ export function BronzeMaterial({ finish = "structural" }: { finish?: BronzeFinis
       normalMap={WORLD_TEXTURES.bronze.normal}
       normalScale={BRONZE_NORMAL_SCALE[finish]}
       metalnessMap={WORLD_TEXTURES.bronze.metalness}
-      metalness={finish === "dark" ? 0.8 : finish === "precision" ? 0.96 : 0.92}
-      roughness={finish === "precision" ? 0.58 : finish === "dark" ? 0.82 : 0.72}
-      envMapIntensity={0.9}
+      metalness={finish === "dark" ? 0.78 : finish === "precision" ? 0.93 : 0.88}
+      roughness={finish === "precision" ? 0.29 : finish === "dark" ? 0.62 : 0.4}
+      envMapIntensity={finish === "precision" ? 1.82 : 1.48}
     />
   );
 }
@@ -88,16 +100,17 @@ export function TechnicalGlassMaterial({ opacity = 0.27 }: { opacity?: number })
       roughnessMap={WORLD_TEXTURES.glassRoughness}
       transparent
       opacity={opacity}
-      transmission={0.38}
-      thickness={0.3}
-      ior={1.47}
-      roughness={0.34}
+      transmission={0.88}
+      thickness={0.68}
+      ior={1.49}
+      roughness={0.17}
       metalness={0.01}
-      specularIntensity={0.72}
-      clearcoat={0.62}
-      clearcoatRoughness={0.2}
-      attenuationColor="#d8e4df"
-      attenuationDistance={1.4}
+      specularIntensity={1}
+      envMapIntensity={1.48}
+      clearcoat={1}
+      clearcoatRoughness={0.08}
+      attenuationColor="#d4edeb"
+      attenuationDistance={2.2}
       depthWrite={false}
       side={DoubleSide}
     />
@@ -115,8 +128,8 @@ export function clonePolishedAuthoredMaterial(source: Material) {
     material.normalMap = WORLD_TEXTURES.limestone.normal;
     material.normalScale.copy(STONE_NORMAL_SCALE);
     material.metalness = 0.01;
-    material.roughness = 0.97;
-    material.envMapIntensity = 0.58;
+    material.roughness = 0.88;
+    material.envMapIntensity = 0.7;
   } else if (material.name.includes("Bronze") || material.name.includes("Dark_Metal")) {
     const precision = material.name.includes("Precision");
     const dark = material.name.includes("Dark_Metal");
@@ -127,28 +140,29 @@ export function clonePolishedAuthoredMaterial(source: Material) {
     material.normalMap = WORLD_TEXTURES.bronze.normal;
     material.normalScale.copy(BRONZE_NORMAL_SCALE[finish]);
     material.metalnessMap = WORLD_TEXTURES.bronze.metalness;
-    material.metalness = finish === "dark" ? 0.8 : finish === "precision" ? 0.96 : 0.92;
-    material.roughness = finish === "precision" ? 0.58 : finish === "dark" ? 0.82 : 0.72;
-    material.envMapIntensity = 0.9;
+    material.metalness = finish === "dark" ? 0.78 : finish === "precision" ? 0.93 : 0.88;
+    material.roughness = finish === "precision" ? 0.29 : finish === "dark" ? 0.62 : 0.4;
+    material.envMapIntensity = finish === "precision" ? 1.82 : 1.48;
   } else if (material.name.includes("Technical_Glass")) {
     material.color.set(WORLD_MATERIALS.technicalGlass);
     material.roughnessMap = WORLD_TEXTURES.glassRoughness;
     material.metalness = 0.01;
-    material.roughness = 0.34;
+    material.roughness = 0.17;
     material.transparent = true;
     material.opacity = 0.27;
     material.depthWrite = false;
     material.side = DoubleSide;
 
     if (material instanceof MeshPhysicalMaterial) {
-      material.transmission = 0.38;
-      material.thickness = 0.3;
-      material.ior = 1.47;
-      material.specularIntensity = 0.72;
-      material.clearcoat = 0.62;
-      material.clearcoatRoughness = 0.2;
-      material.attenuationColor.set("#d8e4df");
-      material.attenuationDistance = 1.4;
+      material.transmission = 0.88;
+      material.thickness = 0.68;
+      material.ior = 1.49;
+      material.specularIntensity = 1;
+      material.envMapIntensity = 1.48;
+      material.clearcoat = 1;
+      material.clearcoatRoughness = 0.08;
+      material.attenuationColor.set("#d4edeb");
+      material.attenuationDistance = 2.2;
     }
   }
 

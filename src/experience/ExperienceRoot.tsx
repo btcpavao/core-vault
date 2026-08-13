@@ -11,6 +11,10 @@ import {
 import { Canvas } from "@react-three/fiber";
 import { ACESFilmicToneMapping, SRGBColorSpace } from "three";
 import { adaptNodeStatusToEngineRoom } from "./adapters/nodeVisualState";
+import {
+  INITIAL_BLOCK_PULSE_STATE,
+  reduceBlockPulse,
+} from "./energy/reactorEnergyState";
 import { ENGINE_ROOM_CAMERA_POSES } from "./camera/engineRoomCamera";
 import {
   hasSpatialFocus,
@@ -118,8 +122,16 @@ export default function ExperienceRoot() {
     () => adaptNodeStatusToEngineRoom(nodeRead.status),
     [nodeRead.status],
   );
+  const [blockPulse, observeBlockHeight] = useReducer(
+    reduceBlockPulse,
+    INITIAL_BLOCK_PULSE_STATE,
+  );
   const [focus, dispatchFocus] = useReducer(reduceSpatialFocus, INITIAL_SPATIAL_FOCUS);
   const [presentationFailure, setPresentationFailure] = useState<string | null>(null);
+
+  useEffect(() => {
+    observeBlockHeight(visualState.blockHeight);
+  }, [visualState.blockHeight]);
 
   const focusTarget = useCallback((target: Exclude<SpatialFocusTarget, "overview">) => {
     dispatchFocus({ type: "focus", target });
@@ -212,6 +224,7 @@ export default function ExperienceRoot() {
             >
               <EngineRoom
                 visualState={visualState}
+                validationPulseSerial={blockPulse.pulseSerial}
                 focus={focus}
                 reducedMotion={reducedMotion}
                 onFocus={focusTarget}

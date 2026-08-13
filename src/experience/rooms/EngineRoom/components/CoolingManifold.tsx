@@ -14,7 +14,7 @@ function CoolingManifoldFallback({ muted = false }: { muted?: boolean }) {
     <group name="cooling-manifold-procedural-fallback">
       <mesh position={[0, 0.22, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[1.08, 1.2, 0.44, 32]} />
-        <LimestoneMaterial tone={muted ? "shadow" : "base"} />
+        <LimestoneMaterial tone={muted ? "shadow" : "base"} surface="hero" />
       </mesh>
       <mesh position={[0, 1.42, 0]} castShadow>
         <cylinderGeometry args={[0.72, 0.72, 2.05, 32]} />

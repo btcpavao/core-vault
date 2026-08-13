@@ -4,6 +4,7 @@ import {
   LimestoneMaterial,
   type LimestoneSurface,
 } from "../../../materials/WorldMaterials";
+import { BeveledCylinder } from "./BeveledCylinder";
 
 interface StoneBlockProps {
   position: [number, number, number];
@@ -81,17 +82,32 @@ function SideColonnades() {
           {[-4.65, -1.5, 1.65, 4.8].map((z) => (
             <group key={z}>
               <mesh position={[x * 0.94, 2.72, z]} castShadow receiveShadow>
-                <cylinderGeometry args={[0.28, 0.34, 4.9, 20]} />
+                <cylinderGeometry args={[0.28, 0.34, 4.9, 32]} />
                 <LimestoneMaterial tone={x < 0 ? "shadow" : "pale"} />
               </mesh>
-              <mesh position={[x * 0.94, 0.23, z]} castShadow receiveShadow>
-                <cylinderGeometry args={[0.48, 0.54, 0.3, 20]} />
+              <BeveledCylinder
+                position={[x * 0.94, 0.23, z]}
+                radiusTop={0.48}
+                radiusBottom={0.54}
+                height={0.3}
+                bevel={0.045}
+                segments={32}
+                castShadow
+                receiveShadow
+              >
                 <LimestoneMaterial tone="base" />
-              </mesh>
-              <mesh position={[x * 0.94, 5.18, z]} castShadow>
-                <cylinderGeometry args={[0.46, 0.3, 0.34, 20]} />
+              </BeveledCylinder>
+              <BeveledCylinder
+                position={[x * 0.94, 5.18, z]}
+                radiusTop={0.3}
+                radiusBottom={0.46}
+                height={0.34}
+                bevel={0.045}
+                segments={32}
+                castShadow
+              >
                 <LimestoneMaterial tone="base" />
-              </mesh>
+              </BeveledCylinder>
             </group>
           ))}
         </group>
@@ -131,14 +147,26 @@ function DeepExitPassage() {
 function ReactorDais() {
   return (
     <group position={[0, 0, -0.72]}>
-      <mesh position={[0, 0.09, 0]} receiveShadow>
-        <cylinderGeometry args={[3.45, 3.68, 0.3, 64]} />
+      <BeveledCylinder
+        position={[0, 0.09, 0]}
+        radiusTop={3.45}
+        radiusBottom={3.68}
+        height={0.3}
+        bevel={0.07}
+        receiveShadow
+      >
         <LimestoneMaterial tone="base" surface="floor" />
-      </mesh>
-      <mesh position={[0, 0.26, 0]} receiveShadow>
-        <cylinderGeometry args={[2.92, 3.1, 0.18, 64]} />
+      </BeveledCylinder>
+      <BeveledCylinder
+        position={[0, 0.26, 0]}
+        radiusTop={2.92}
+        radiusBottom={3.1}
+        height={0.18}
+        bevel={0.045}
+        receiveShadow
+      >
         <LimestoneMaterial tone="pale" surface="floor" />
-      </mesh>
+      </BeveledCylinder>
       {[2.98, 3.5].map((radius) => (
         <mesh key={radius} position={[0, 0.31, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[radius, 0.045, 10, 72]} />

@@ -10,6 +10,7 @@ const roomFiles = [
   "src/experience/rooms/EngineRoom/components/CoolingManifold.tsx",
   "src/experience/rooms/EngineRoom/components/EnergyConduit.tsx",
   "src/experience/rooms/EngineRoom/components/NetworkConsole.tsx",
+  "src/experience/rooms/EngineRoom/components/ReactorEnergyField.tsx",
   "src/experience/rooms/EngineRoom/components/RoomArchitecture.tsx",
 ];
 
@@ -63,7 +64,7 @@ describe("real-time experience boundary", () => {
     expect(roomSource).toMatch(/BronzeMaterial/);
     expect(roomSource).toMatch(/TechnicalGlassMaterial/);
     expect(roomSource).toMatch(/EnergyMaterial/);
-    expect(engineRoomSource).toContain('<Environment background={false} frames={1} resolution={64}>');
+    expect(engineRoomSource).toContain('<Environment background={false} frames={1} resolution={256}>');
     expect(engineRoomSource).not.toMatch(/\.hdr|\.exr|preset=/i);
   });
 

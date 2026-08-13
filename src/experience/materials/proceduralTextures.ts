@@ -10,8 +10,9 @@ import {
   type ColorSpace,
 } from "three";
 
-const TEXTURE_SIZE = 128;
 const CHANNELS = 4;
+const ARCHITECTURE_SIZE = 512;
+const HERO_SIZE = 1024;
 
 type Repeat = readonly [number, number];
 
@@ -47,21 +48,31 @@ function periodicNoise(u: number, v: number, cells: number, seed: number) {
   const wrappedY = ((cellY % cells) + cells) % cells;
   const blendX = smooth(scaledX - cellX);
   const blendY = smooth(scaledY - cellY);
-  const top = hash2(wrappedX, wrappedY, seed) * (1 - blendX) + hash2(nextX, wrappedY, seed) * blendX;
-  const bottom = hash2(wrappedX, nextY, seed) * (1 - blendX) + hash2(nextX, nextY, seed) * blendX;
+  const top =
+    hash2(wrappedX, wrappedY, seed) * (1 - blendX) +
+    hash2(nextX, wrappedY, seed) * blendX;
+  const bottom =
+    hash2(wrappedX, nextY, seed) * (1 - blendX) +
+    hash2(nextX, nextY, seed) * blendX;
   return top * (1 - blendY) + bottom * blendY;
 }
 
 function layeredNoise(u: number, v: number, seed: number) {
   return (
-    periodicNoise(u, v, 2, seed) * 0.5 +
-    periodicNoise(u, v, 5, seed + 11) * 0.27 +
-    periodicNoise(u, v, 11, seed + 29) * 0.15 +
-    periodicNoise(u, v, 23, seed + 47) * 0.08
+    periodicNoise(u, v, 3, seed) * 0.52 +
+    periodicNoise(u, v, 8, seed + 11) * 0.28 +
+    periodicNoise(u, v, 21, seed + 29) * 0.14 +
+    periodicNoise(u, v, 55, seed + 47) * 0.06
   );
 }
 
-function writePixel(data: Uint8Array, index: number, red: number, green = red, blue = red) {
+function writePixel(
+  data: Uint8Array,
+  index: number,
+  red: number,
+  green = red,
+  blue = red,
+) {
   const offset = index * CHANNELS;
   data[offset] = toByte(red);
   data[offset + 1] = toByte(green);
@@ -72,16 +83,11 @@ function writePixel(data: Uint8Array, index: number, red: number, green = red, b
 function createTexture(
   name: string,
   data: Uint8Array,
+  size: number,
   colorSpace: ColorSpace,
   repeat: Repeat,
 ) {
-  const texture = new DataTexture(
-    data,
-    TEXTURE_SIZE,
-    TEXTURE_SIZE,
-    RGBAFormat,
-    UnsignedByteType,
-  );
+  const texture = new DataTexture(data, size, size, RGBAFormat, UnsignedByteType);
   texture.name = name;
   texture.colorSpace = colorSpace;
   texture.wrapS = RepeatWrapping;
@@ -90,27 +96,24 @@ function createTexture(
   texture.magFilter = LinearFilter;
   texture.minFilter = LinearMipmapLinearFilter;
   texture.generateMipmaps = true;
-  texture.anisotropy = 4;
+  texture.anisotropy = 8;
   texture.needsUpdate = true;
   return texture;
 }
 
-function normalDataFromHeight(height: Float32Array, strength: number) {
-  const data = new Uint8Array(TEXTURE_SIZE * TEXTURE_SIZE * CHANNELS);
+function normalDataFromHeight(height: Float32Array, size: number, strength: number) {
+  const data = new Uint8Array(size * size * CHANNELS);
   const sample = (x: number, y: number) =>
-    height[
-      ((y + TEXTURE_SIZE) % TEXTURE_SIZE) * TEXTURE_SIZE +
-        ((x + TEXTURE_SIZE) % TEXTURE_SIZE)
-    ];
+    height[((y + size) % size) * size + ((x + size) % size)];
 
-  for (let y = 0; y < TEXTURE_SIZE; y += 1) {
-    for (let x = 0; x < TEXTURE_SIZE; x += 1) {
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
       const normalX = (sample(x - 1, y) - sample(x + 1, y)) * strength;
       const normalY = (sample(x, y - 1) - sample(x, y + 1)) * strength;
       const length = Math.hypot(normalX, normalY, 1);
       writePixel(
         data,
-        y * TEXTURE_SIZE + x,
+        y * size + x,
         normalX / length / 2 + 0.5,
         normalY / length / 2 + 0.5,
         1 / length / 2 + 0.5,
@@ -125,39 +128,64 @@ function floorJoint(u: number, v: number) {
   const tileX = (u * 2) % 1;
   const tileY = (v * 2) % 1;
   const edgeDistance = Math.min(tileX, 1 - tileX, tileY, 1 - tileY);
-  return smooth(clamp01(1 - edgeDistance / 0.026));
+  return smooth(clamp01(1 - edgeDistance / 0.018));
 }
 
-function createLimestoneTextures(name: "limestone" | "floor", repeat: Repeat): SurfaceTextureSet {
-  const baseColor = new Uint8Array(TEXTURE_SIZE * TEXTURE_SIZE * CHANNELS);
-  const roughness = new Uint8Array(TEXTURE_SIZE * TEXTURE_SIZE * CHANNELS);
-  const height = new Float32Array(TEXTURE_SIZE * TEXTURE_SIZE);
-  const isFloor = name === "floor";
-  const seed = isFloor ? 61 : 17;
+function createLimestoneTextures(
+  name: "limestone_architecture" | "limestone_hero" | "floor_hero",
+  size: number,
+  repeat: Repeat,
+): SurfaceTextureSet {
+  const baseColor = new Uint8Array(size * size * CHANNELS);
+  const roughness = new Uint8Array(size * size * CHANNELS);
+  const height = new Float32Array(size * size);
+  const isFloor = name === "floor_hero";
+  const isHero = name !== "limestone_architecture";
+  const seed = isFloor ? 61 : isHero ? 37 : 17;
 
-  for (let y = 0; y < TEXTURE_SIZE; y += 1) {
-    for (let x = 0; x < TEXTURE_SIZE; x += 1) {
-      const index = y * TEXTURE_SIZE + x;
-      const u = x / TEXTURE_SIZE;
-      const v = y / TEXTURE_SIZE;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const index = y * size + x;
+      const u = x / size;
+      const v = y / size;
       const cloud = layeredNoise(u, v, seed);
-      const fine = periodicNoise(u, v, 41, seed + 73);
+      const mineral = periodicNoise(u, v, 34, seed + 73);
+      const grain = periodicNoise(u, v, 92, seed + 127);
       const joint = isFloor ? floorJoint(u, v) : 0;
-      const pore = hash2(x, y, seed + 101) > 0.988 ? 1 : 0;
-      const neutral = 0.95 + (cloud - 0.5) * 0.095 - joint * 0.035 - pore * 0.025;
+      const poreChance = hash2(x, y, seed + 181);
+      const pore = poreChance > (isHero ? 0.994 : 0.997) ? 1 : 0;
+      const warmMineral = smooth(clamp01((mineral - 0.58) / 0.28));
+      const neutral =
+        0.94 +
+        (cloud - 0.5) * 0.12 +
+        (grain - 0.5) * 0.022 -
+        joint * 0.07 -
+        pore * 0.08;
 
-      height[index] = cloud * 0.55 + fine * 0.055 - joint * 0.045 - pore * 0.012;
-      writePixel(baseColor, index, neutral * 1.018, neutral, neutral * 0.955);
-      writePixel(roughness, index, 0.8 + cloud * 0.1 + fine * 0.025 + joint * 0.035);
+      height[index] =
+        cloud * 0.58 + grain * 0.04 - joint * 0.08 - pore * 0.032;
+      writePixel(
+        baseColor,
+        index,
+        neutral * (1.035 + warmMineral * 0.018),
+        neutral * (1.004 + warmMineral * 0.006),
+        neutral * (0.946 - warmMineral * 0.014),
+      );
+      writePixel(
+        roughness,
+        index,
+        0.72 + cloud * 0.13 + grain * 0.04 + joint * 0.08 + pore * 0.06,
+      );
     }
   }
 
   return {
-    baseColor: createTexture(`CV_${name}_base_color`, baseColor, SRGBColorSpace, repeat),
-    roughness: createTexture(`CV_${name}_roughness`, roughness, NoColorSpace, repeat),
+    baseColor: createTexture(`CV_${name}_base_color`, baseColor, size, SRGBColorSpace, repeat),
+    roughness: createTexture(`CV_${name}_roughness`, roughness, size, NoColorSpace, repeat),
     normal: createTexture(
       `CV_${name}_normal`,
-      normalDataFromHeight(height, isFloor ? 3.8 : 3.2),
+      normalDataFromHeight(height, size, isFloor ? 5.4 : isHero ? 4.8 : 3.5),
+      size,
       NoColorSpace,
       repeat,
     ),
@@ -165,77 +193,97 @@ function createLimestoneTextures(name: "limestone" | "floor", repeat: Repeat): S
 }
 
 function createBronzeTextures(): BronzeTextureSet {
-  const baseColor = new Uint8Array(TEXTURE_SIZE * TEXTURE_SIZE * CHANNELS);
-  const roughness = new Uint8Array(TEXTURE_SIZE * TEXTURE_SIZE * CHANNELS);
-  const metalness = new Uint8Array(TEXTURE_SIZE * TEXTURE_SIZE * CHANNELS);
-  const height = new Float32Array(TEXTURE_SIZE * TEXTURE_SIZE);
-  const repeat: Repeat = [2.5, 3.5];
+  const size = HERO_SIZE;
+  const baseColor = new Uint8Array(size * size * CHANNELS);
+  const roughness = new Uint8Array(size * size * CHANNELS);
+  const metalness = new Uint8Array(size * size * CHANNELS);
+  const height = new Float32Array(size * size);
+  const repeat: Repeat = [3, 5];
 
-  for (let y = 0; y < TEXTURE_SIZE; y += 1) {
-    for (let x = 0; x < TEXTURE_SIZE; x += 1) {
-      const index = y * TEXTURE_SIZE + x;
-      const u = x / TEXTURE_SIZE;
-      const v = y / TEXTURE_SIZE;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const index = y * size + x;
+      const u = x / size;
+      const v = y / size;
       const cloud = layeredNoise(u, v, 113);
-      const grain = periodicNoise(u, v, 47, 151);
-      const brush = Math.sin(v * Math.PI * 2 * 48 + grain * 0.8) * 0.5 + 0.5;
-      const patina = smooth(clamp01((cloud - 0.67) / 0.22));
-      const neutral = 0.94 + (cloud - 0.5) * 0.1 - patina * 0.035;
+      const grain = periodicNoise(u, v, 67, 151);
+      const brush = Math.sin(v * Math.PI * 2 * 96 + grain * 0.95) * 0.5 + 0.5;
+      const patina = smooth(clamp01((cloud - 0.72) / 0.2));
+      const neutral = 0.93 + (cloud - 0.5) * 0.13 - patina * 0.055;
 
-      height[index] = cloud * 0.17 + grain * 0.05 + brush * 0.045;
+      height[index] = cloud * 0.14 + grain * 0.04 + brush * 0.052;
       writePixel(
         baseColor,
         index,
-        neutral * (1 - patina * 0.045),
-        neutral * (1 + patina * 0.018),
-        neutral * (1 + patina * 0.034),
+        neutral * (1.035 - patina * 0.035),
+        neutral * (0.995 + patina * 0.008),
+        neutral * (0.945 + patina * 0.025),
       );
-      writePixel(roughness, index, 0.48 + cloud * 0.2 + brush * 0.055 + patina * 0.11);
-      writePixel(metalness, index, 0.97 - patina * 0.17);
+      writePixel(roughness, index, 0.32 + cloud * 0.21 + brush * 0.09 + patina * 0.14);
+      writePixel(metalness, index, 0.99 - patina * 0.12);
     }
   }
 
   return {
-    baseColor: createTexture("CV_bronze_base_color", baseColor, SRGBColorSpace, repeat),
-    roughness: createTexture("CV_bronze_roughness", roughness, NoColorSpace, repeat),
+    baseColor: createTexture("CV_bronze_hero_base_color", baseColor, size, SRGBColorSpace, repeat),
+    roughness: createTexture("CV_bronze_hero_roughness", roughness, size, NoColorSpace, repeat),
     normal: createTexture(
-      "CV_bronze_normal",
-      normalDataFromHeight(height, 10),
+      "CV_bronze_hero_normal",
+      normalDataFromHeight(height, size, 12),
+      size,
       NoColorSpace,
       repeat,
     ),
-    metalness: createTexture("CV_bronze_metalness", metalness, NoColorSpace, repeat),
+    metalness: createTexture("CV_bronze_hero_metalness", metalness, size, NoColorSpace, repeat),
   };
 }
 
 function createGlassRoughnessTexture() {
-  const data = new Uint8Array(TEXTURE_SIZE * TEXTURE_SIZE * CHANNELS);
+  const size = HERO_SIZE;
+  const data = new Uint8Array(size * size * CHANNELS);
 
-  for (let y = 0; y < TEXTURE_SIZE; y += 1) {
-    for (let x = 0; x < TEXTURE_SIZE; x += 1) {
-      const u = x / TEXTURE_SIZE;
-      const v = y / TEXTURE_SIZE;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const u = x / size;
+      const v = y / size;
       const cloud = layeredNoise(u, v, 211);
-      const vertical = periodicNoise(u, v, 29, 227);
-      writePixel(data, y * TEXTURE_SIZE + x, 0.34 + cloud * 0.2 + vertical * 0.045);
+      const vertical = periodicNoise(u, v, 57, 227);
+      writePixel(data, y * size + x, 0.16 + cloud * 0.14 + vertical * 0.035);
     }
   }
 
-  return createTexture("CV_technical_glass_roughness", data, NoColorSpace, [2, 4]);
+  return createTexture(
+    "CV_technical_glass_hero_roughness",
+    data,
+    size,
+    NoColorSpace,
+    [3, 6],
+  );
 }
 
 export const WORLD_TEXTURES = {
-  limestone: createLimestoneTextures("limestone", [2.2, 2.2]),
-  floor: createLimestoneTextures("floor", [3.5, 3.5]),
+  limestone: createLimestoneTextures(
+    "limestone_architecture",
+    ARCHITECTURE_SIZE,
+    [3.5, 3.5],
+  ),
+  limestoneHero: createLimestoneTextures("limestone_hero", HERO_SIZE, [2.4, 2.4]),
+  floor: createLimestoneTextures("floor_hero", HERO_SIZE, [6, 6]),
   bronze: createBronzeTextures(),
   glassRoughness: createGlassRoughnessTexture(),
 } as const;
 
+const UNCOMPRESSED_BYTES =
+  ARCHITECTURE_SIZE * ARCHITECTURE_SIZE * CHANNELS * 3 +
+  HERO_SIZE * HERO_SIZE * CHANNELS * 11;
+
 export const PROCEDURAL_TEXTURE_METADATA = {
   origin: "Core Vault original",
   license: "Core Vault original",
-  resolution: TEXTURE_SIZE,
-  textureCount: 11,
-  uncompressedBytes: TEXTURE_SIZE * TEXTURE_SIZE * CHANNELS * 11,
+  architectureResolution: ARCHITECTURE_SIZE,
+  heroResolution: HERO_SIZE,
+  textureCount: 14,
+  uncompressedBytes: UNCOMPRESSED_BYTES,
+  estimatedBytesWithMipmaps: Math.ceil(UNCOMPRESSED_BYTES * (4 / 3)),
   mapTypes: ["base color", "roughness", "normal", "metalness"],
 } as const;
