@@ -1,6 +1,23 @@
-import { Component, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
+import {
+  Component,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useState,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 import { Canvas } from "@react-three/fiber";
+import { ACESFilmicToneMapping, SRGBColorSpace } from "three";
 import { adaptNodeStatusToEngineRoom } from "./adapters/nodeVisualState";
+import { ENGINE_ROOM_CAMERA_POSES } from "./camera/engineRoomCamera";
+import {
+  hasSpatialFocus,
+  INITIAL_SPATIAL_FOCUS,
+  reduceSpatialFocus,
+  type SpatialFocusTarget,
+} from "./interaction/spatialFocus";
 import { EngineRoom } from "./rooms/EngineRoom/EngineRoom";
 import { useDocumentVisibility, useNodeStatus } from "./useNodeStatus";
 import { loadPreferences } from "../lib/preferences";
@@ -83,6 +100,11 @@ const activityLabel = (activity: "idle" | "syncing" | "ready" | "attention") => 
   return "Waiting for status";
 };
 
+const networkLabel = (networkActive: boolean | null) => {
+  if (networkActive === null) return "Unknown";
+  return networkActive ? "Active" : "Disabled";
+};
+
 const formatProgress = (progress: number | null) =>
   progress === null
     ? "Unknown"
@@ -96,25 +118,46 @@ export default function ExperienceRoot() {
     () => adaptNodeStatusToEngineRoom(nodeRead.status),
     [nodeRead.status],
   );
-  const [reactorFocused, setReactorFocused] = useState(false);
+  const [focus, dispatchFocus] = useReducer(reduceSpatialFocus, INITIAL_SPATIAL_FOCUS);
   const [presentationFailure, setPresentationFailure] = useState<string | null>(null);
+
+  const focusTarget = useCallback((target: Exclude<SpatialFocusTarget, "overview">) => {
+    dispatchFocus({ type: "focus", target });
+    window.requestAnimationFrame(() => {
+      document.getElementById("engine-room-precision-panel")?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  const clearFocus = useCallback(() => dispatchFocus({ type: "back" }), []);
+
+  const returnToOverview = useCallback(() => {
+    const returnTarget = focus;
+    dispatchFocus({ type: "back" });
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(
+          returnTarget === "network-console" ? "focus-network-console" : "focus-reactor",
+        )
+        ?.focus({ preventScroll: true });
+    });
+  }, [focus]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && reactorFocused) {
+      if (event.key === "Escape" && hasSpatialFocus(focus)) {
         event.preventDefault();
-        setReactorFocused(false);
+        returnToOverview();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [reactorFocused]);
+  }, [focus, returnToOverview]);
 
-  const focusReactor = () => setReactorFocused(true);
-  const clearFocus = () => setReactorFocused(false);
   const statusText = nodeRead.reading
     ? "Reading the local node"
     : connectionLabel(visualState.connection);
+  const selectedContext = focus === "network-console" ? "network" : "reactor";
+  const initialCamera = ENGINE_ROOM_CAMERA_POSES.overview;
 
   return (
     <main className="experience-root" data-motion={reducedMotion ? "reduced" : "full"}>
@@ -139,9 +182,15 @@ export default function ExperienceRoot() {
         ) : (
           <PresentationBoundary onFailure={setPresentationFailure}>
             <Canvas
+              shadows
               dpr={[1, 1.5]}
               frameloop={visible ? "always" : "never"}
-              camera={{ position: [7.6, 4.65, 10.8], fov: 42, near: 0.1, far: 70 }}
+              camera={{
+                position: [...initialCamera.position],
+                fov: initialCamera.fov,
+                near: 0.1,
+                far: 70,
+              }}
               gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
               onPointerMissed={clearFocus}
               fallback={
@@ -150,6 +199,9 @@ export default function ExperienceRoot() {
                 </span>
               }
               onCreated={({ gl }) => {
+                gl.outputColorSpace = SRGBColorSpace;
+                gl.toneMapping = ACESFilmicToneMapping;
+                gl.toneMappingExposure = 1.04;
                 const canvas = gl.domElement;
                 const onContextLost = (event: Event) => {
                   event.preventDefault();
@@ -160,9 +212,9 @@ export default function ExperienceRoot() {
             >
               <EngineRoom
                 visualState={visualState}
-                reactorFocused={reactorFocused}
+                focus={focus}
                 reducedMotion={reducedMotion}
-                onFocusReactor={focusReactor}
+                onFocus={focusTarget}
                 onClearFocus={clearFocus}
               />
             </Canvas>
@@ -173,7 +225,7 @@ export default function ExperienceRoot() {
       {!presentationFailure && (
         <>
           <header className="experience-room-identity">
-            <p className="experience-kicker">Real-time architecture proof</p>
+            <p className="experience-kicker">Operational environment</p>
             <h1>Engine Room</h1>
             <p>The visible home of the local Bitcoin Core node.</p>
           </header>
@@ -184,68 +236,100 @@ export default function ExperienceRoot() {
             <strong>{chainLabel(visualState.chain)}</strong>
           </div>
 
-          <nav className="experience-exit" aria-label="Experience proof navigation">
+          <nav className="experience-exit" aria-label="Engine Room navigation">
             <a href="/">Return to existing interface</a>
             <span aria-hidden="true">·</span>
-            <span>Exit passage is a future room seam</span>
+            <span>Exit passage reserved for the next room</span>
           </nav>
 
-          <div id="engine-room-access" className="experience-access-control">
+          <div id="engine-room-access" className="experience-access-control" aria-label="Room focus controls">
             <button
+              id="focus-reactor"
               type="button"
-              aria-expanded={reactorFocused}
-              aria-controls="reactor-precision-panel"
-              onClick={() => setReactorFocused((focused) => !focused)}
+              className={focus === "reactor" ? "is-active" : undefined}
+              aria-pressed={focus === "reactor"}
+              aria-controls="engine-room-precision-panel"
+              onClick={() => focusTarget("reactor")}
             >
-              {reactorFocused ? "Close reactor inspection" : "Inspect Core Reactor"}
+              Inspect Core Reactor
+            </button>
+            <button
+              id="focus-network-console"
+              type="button"
+              className={focus === "network-console" ? "is-active" : undefined}
+              aria-pressed={focus === "network-console"}
+              aria-controls="engine-room-precision-panel"
+              onClick={() => focusTarget("network-console")}
+            >
+              Inspect Network Console
             </button>
           </div>
 
-          {reactorFocused && (
+          {hasSpatialFocus(focus) && (
             <aside
-              id="reactor-precision-panel"
-              className="reactor-precision-panel"
-              aria-label="Bitcoin Core reactor details"
+              id="engine-room-precision-panel"
+              className="experience-precision-panel"
+              aria-label={selectedContext === "reactor" ? "Bitcoin Core reactor details" : "Bitcoin Core network details"}
+              tabIndex={-1}
             >
               <div>
-                <p className="experience-kicker">Core Reactor</p>
-                <h2>{activityLabel(visualState.activity)}</h2>
+                <p className="experience-kicker">
+                  {selectedContext === "reactor" ? "Core Reactor" : "Network Console"}
+                </p>
+                <h2>
+                  {selectedContext === "reactor"
+                    ? activityLabel(visualState.activity)
+                    : networkLabel(visualState.networkActive)}
+                </h2>
               </div>
-              <button type="button" className="panel-close" onClick={clearFocus}>
-                Close <span aria-hidden="true">×</span>
+              <button type="button" className="panel-close" onClick={returnToOverview}>
+                Back <span aria-hidden="true">×</span>
               </button>
               <dl>
-                <div>
-                  <dt>Chain</dt>
-                  <dd>{chainLabel(visualState.chain)}</dd>
-                </div>
-                <div>
-                  <dt>Block height</dt>
-                  <dd>{visualState.blockHeight?.toLocaleString() ?? "Unknown"}</dd>
-                </div>
-                <div>
-                  <dt>Synchronization</dt>
-                  <dd>{formatProgress(visualState.syncProgress)}</dd>
-                </div>
-                <div>
-                  <dt>Peers</dt>
-                  <dd>{visualState.peerCount?.toLocaleString() ?? "Unknown"}</dd>
-                </div>
-                <div>
-                  <dt>Networking</dt>
-                  <dd>
-                    {visualState.networkActive === null
-                      ? "Unknown"
-                      : visualState.networkActive
-                        ? "Active"
-                        : "Disabled"}
-                  </dd>
-                </div>
+                {selectedContext === "reactor" ? (
+                  <>
+                    <div>
+                      <dt>Chain</dt>
+                      <dd>{chainLabel(visualState.chain)}</dd>
+                    </div>
+                    <div>
+                      <dt>Block height</dt>
+                      <dd>{visualState.blockHeight?.toLocaleString() ?? "Unknown"}</dd>
+                    </div>
+                    <div>
+                      <dt>Synchronization</dt>
+                      <dd>{formatProgress(visualState.syncProgress)}</dd>
+                    </div>
+                    <div>
+                      <dt>Core connection</dt>
+                      <dd>{connectionLabel(visualState.connection)}</dd>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <dt>Networking</dt>
+                      <dd>{networkLabel(visualState.networkActive)}</dd>
+                    </div>
+                    <div>
+                      <dt>Connected peers</dt>
+                      <dd>{visualState.peerCount?.toLocaleString() ?? "Unknown"}</dd>
+                    </div>
+                    <div>
+                      <dt>Core connection</dt>
+                      <dd>{connectionLabel(visualState.connection)}</dd>
+                    </div>
+                    <div>
+                      <dt>Chain</dt>
+                      <dd>{chainLabel(visualState.chain)}</dd>
+                    </div>
+                  </>
+                )}
               </dl>
               {nodeRead.message && (
-                <p className="reactor-read-note">Live node status could not be read in this runtime.</p>
+                <p className="experience-read-note">Live node status could not be read in this runtime.</p>
               )}
-              <p className="panel-escape">Press Escape to return to the neutral room view.</p>
+              <p className="panel-escape">Press Escape or Back to return to Room Overview.</p>
             </aside>
           )}
         </>

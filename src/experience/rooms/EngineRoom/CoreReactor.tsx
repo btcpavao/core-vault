@@ -1,7 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import { useFrame, type ThreeEvent } from "@react-three/fiber";
+import { useRef, useState, type RefObject } from "react";
+import { useFrame } from "@react-three/fiber";
 import type { Group, MeshStandardMaterial } from "three";
 import type { EngineRoomVisualState } from "../../adapters/nodeVisualState";
+import { SpatialHitTarget } from "../../interaction/SpatialHitTarget";
+import {
+  BronzeMaterial,
+  EnergyMaterial,
+  LimestoneMaterial,
+  TechnicalGlassMaterial,
+} from "../../materials/WorldMaterials";
 
 interface CoreReactorProps {
   visualState: EngineRoomVisualState;
@@ -10,9 +17,168 @@ interface CoreReactorProps {
   onFocus: () => void;
 }
 
-const BLUE = "#45bde8";
-const BLUE_WHITE = "#d9f8ff";
-const DORMANT = "#30434b";
+function ReactorFoundation() {
+  return (
+    <group>
+      <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[2.02, 2.22, 0.36, 56]} />
+        <LimestoneMaterial tone="shadow" />
+      </mesh>
+      <mesh position={[0, 0.43, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[1.7, 1.87, 0.22, 56]} />
+        <BronzeMaterial finish="structural" />
+      </mesh>
+      <mesh position={[0, 0.58, 0]} castShadow>
+        <cylinderGeometry args={[1.42, 1.55, 0.14, 48]} />
+        <BronzeMaterial finish="precision" />
+      </mesh>
+      {Array.from({ length: 12 }, (_, index) => {
+        const angle = (index / 12) * Math.PI * 2;
+        return (
+          <mesh
+            key={index}
+            position={[Math.cos(angle) * 1.74, 0.55, Math.sin(angle) * 1.74]}
+            castShadow
+          >
+            <cylinderGeometry args={[0.065, 0.065, 0.12, 12]} />
+            <BronzeMaterial finish="dark" />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+function ReactorCage() {
+  return (
+    <group>
+      {[0.72, 1.68, 2.64, 3.55].map((height, index) => (
+        <mesh key={height} position={[0, height, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <torusGeometry args={[1.12 - index * 0.015, 0.1, 14, 56]} />
+          <BronzeMaterial finish={index === 1 || index === 2 ? "precision" : "structural"} />
+        </mesh>
+      ))}
+      {Array.from({ length: 8 }, (_, index) => {
+        const angle = (index / 8) * Math.PI * 2;
+        return (
+          <mesh
+            key={index}
+            position={[Math.cos(angle) * 1.04, 2.12, Math.sin(angle) * 1.04]}
+            rotation={[0, -angle, 0]}
+            castShadow
+          >
+            <boxGeometry args={[0.11, 2.76, 0.15]} />
+            <BronzeMaterial finish={index % 2 === 0 ? "structural" : "dark"} />
+          </mesh>
+        );
+      })}
+      <mesh position={[0, 3.75, 0]} castShadow>
+        <cylinderGeometry args={[0.75, 1.03, 0.34, 48]} />
+        <BronzeMaterial finish="structural" />
+      </mesh>
+      <mesh position={[0, 4.01, 0]} castShadow>
+        <cylinderGeometry args={[0.39, 0.58, 0.2, 32]} />
+        <BronzeMaterial finish="precision" />
+      </mesh>
+      <mesh position={[0, 4.18, 0]} castShadow>
+        <cylinderGeometry args={[0.12, 0.12, 0.2, 20]} />
+        <BronzeMaterial finish="dark" />
+      </mesh>
+    </group>
+  );
+}
+
+function ComputationalCore({
+  visualState,
+  energyMaterialRef,
+}: {
+  visualState: EngineRoomVisualState;
+  energyMaterialRef: RefObject<MeshStandardMaterial>;
+}) {
+  const online = visualState.connection === "online";
+  const syncProgress = visualState.syncProgress ?? 0;
+
+  return (
+    <group>
+      <mesh position={[0, 2.08, 0]} castShadow>
+        <cylinderGeometry args={[0.34, 0.46, 2.74, 24]} />
+        <EnergyMaterial
+          ref={energyMaterialRef}
+          connection={visualState.connection}
+          active={online}
+          intensity={visualState.activity === "syncing" ? 1.5 : 1.14}
+          highlight
+        />
+      </mesh>
+      {[-0.78, 0, 0.78].map((offset, ringIndex) => (
+        <group key={offset} position={[0, 2.08 + offset, 0]} rotation={[0, ringIndex * 0.38, 0]}>
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.68, 0.045, 10, 44]} />
+            <EnergyMaterial connection={visualState.connection} active={online} intensity={0.82} />
+          </mesh>
+          {Array.from({ length: 8 }, (_, index) => {
+            const angle = (index / 8) * Math.PI * 2;
+            return (
+              <mesh
+                key={index}
+                position={[Math.cos(angle) * 0.62, 0, Math.sin(angle) * 0.62]}
+                rotation={[0, -angle, 0]}
+              >
+                <boxGeometry args={[0.13, 0.2, 0.08]} />
+                <EnergyMaterial
+                  connection={visualState.connection}
+                  active={online && (ringIndex + index) % 3 !== 0}
+                  intensity={0.58}
+                />
+              </mesh>
+            );
+          })}
+        </group>
+      ))}
+      <mesh position={[0, 3.37, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.84, 0.032, 10, 64]} />
+        <BronzeMaterial finish="dark" />
+      </mesh>
+      {online && (
+        <mesh position={[0, 3.37, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry
+            args={[0.84, 0.052, 10, 64, Math.max(0.04, Math.PI * 2 * syncProgress)]}
+          />
+          <EnergyMaterial
+            connection={visualState.connection}
+            active
+            intensity={visualState.activity === "syncing" ? 1.16 : 0.74}
+          />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+function ReactorConnectors({ visualState }: { visualState: EngineRoomVisualState }) {
+  const active = visualState.connection === "online" && visualState.networkActive === true;
+
+  return (
+    <group position={[0, 1.02, 0]}>
+      {[0, Math.PI / 2, Math.PI, -Math.PI / 2].map((angle) => (
+        <group key={angle} rotation={[0, angle, 0]}>
+          <mesh position={[0, 0, 1.32]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.16, 0.16, 0.58, 20]} />
+            <BronzeMaterial finish="dark" />
+          </mesh>
+          <mesh position={[0, 0, 1.63]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.2, 0.06, 10, 24]} />
+            <BronzeMaterial finish="precision" />
+          </mesh>
+          <mesh position={[0, 0, 1.68]}>
+            <sphereGeometry args={[0.075, 16, 12]} />
+            <EnergyMaterial connection={visualState.connection} active={active} intensity={0.72} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
 
 export function CoreReactor({
   visualState,
@@ -20,187 +186,66 @@ export function CoreReactor({
   reducedMotion,
   onFocus,
 }: CoreReactorProps) {
-  const reactorRef = useRef<Group>(null);
-  const innerRingRef = useRef<Group>(null);
-  const networkRingRef = useRef<Group>(null);
+  const innerAssemblyRef = useRef<Group>(null);
+  const networkAssemblyRef = useRef<Group>(null);
   const energyMaterialRef = useRef<MeshStandardMaterial>(null);
   const [hovered, setHovered] = useState(false);
-
   const online = visualState.connection === "online";
   const networkActive = online && visualState.networkActive === true;
-  const syncProgress = visualState.syncProgress ?? 0;
-  const energyColor = online ? BLUE : DORMANT;
-  const baseEnergy = online ? (visualState.activity === "syncing" ? 1.55 : 1.25) : 0.08;
-
-  useEffect(() => {
-    if (!hovered) return;
-    const previousCursor = document.body.style.cursor;
-    document.body.style.cursor = "pointer";
-    return () => {
-      document.body.style.cursor = previousCursor;
-    };
-  }, [hovered]);
+  const baseEnergy = online ? (visualState.activity === "syncing" ? 1.5 : 1.14) : 0.035;
 
   useFrame(({ clock }, delta) => {
-    if (!reducedMotion) {
-      if (innerRingRef.current && online) {
-        const speed = visualState.activity === "syncing" ? 0.22 : 0.08;
-        innerRingRef.current.rotation.y += delta * speed;
-      }
-      if (networkRingRef.current && networkActive) {
-        networkRingRef.current.rotation.z -= delta * 0.12;
-      }
-      if (energyMaterialRef.current) {
-        const cadence = visualState.activity === "syncing" ? 1.7 : 0.65;
-        const pulse = Math.sin(clock.elapsedTime * cadence) * (online ? 0.16 : 0.02);
-        energyMaterialRef.current.emissiveIntensity = baseEnergy + pulse;
-      }
-    } else if (energyMaterialRef.current) {
-      energyMaterialRef.current.emissiveIntensity = baseEnergy;
+    if (reducedMotion) {
+      if (energyMaterialRef.current) energyMaterialRef.current.emissiveIntensity = baseEnergy;
+      return;
+    }
+    if (innerAssemblyRef.current && online) {
+      innerAssemblyRef.current.rotation.y += delta * (visualState.activity === "syncing" ? 0.18 : 0.065);
+    }
+    if (networkAssemblyRef.current && networkActive) {
+      networkAssemblyRef.current.rotation.z -= delta * 0.09;
+    }
+    if (energyMaterialRef.current) {
+      const cadence = visualState.activity === "syncing" ? 1.45 : 0.55;
+      energyMaterialRef.current.emissiveIntensity =
+        baseEnergy + Math.sin(clock.elapsedTime * cadence) * (online ? 0.12 : 0.01);
     }
   });
 
-  const stopAndFocus = (event: ThreeEvent<MouseEvent>) => {
-    event.stopPropagation();
-    onFocus();
-  };
-
   return (
-    <group ref={reactorRef} position={[0, 0, -0.5]}>
-      <mesh position={[0, 0.16, 0]} receiveShadow>
-        <cylinderGeometry args={[1.9, 2.15, 0.32, 48]} />
-        <meshStandardMaterial color="#54412f" metalness={0.52} roughness={0.48} />
-      </mesh>
-      <mesh position={[0, 0.42, 0]}>
-        <cylinderGeometry args={[1.55, 1.72, 0.28, 48]} />
-        <meshStandardMaterial color="#92704b" metalness={0.82} roughness={0.34} />
-      </mesh>
-
-      <group ref={innerRingRef}>
-        <mesh position={[0, 1.82, 0]}>
-          <cylinderGeometry args={[0.46, 0.46, 2.45, 32]} />
-          <meshStandardMaterial
-            ref={energyMaterialRef}
-            color={online ? BLUE_WHITE : DORMANT}
-            emissive={energyColor}
-            emissiveIntensity={baseEnergy}
-            roughness={0.28}
-          />
-        </mesh>
-        <mesh position={[0, 1.82, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.7, 0.055, 12, 48]} />
-          <meshStandardMaterial
-            color={energyColor}
-            emissive={energyColor}
-            emissiveIntensity={online ? 0.9 : 0.04}
-            metalness={0.35}
-            roughness={0.28}
-          />
-        </mesh>
+    <group position={[0, 0, -0.72]} name="core-reactor">
+      <ReactorFoundation />
+      <group ref={innerAssemblyRef}>
+        <ComputationalCore visualState={visualState} energyMaterialRef={energyMaterialRef} />
       </group>
-
-      <mesh position={[0, 1.82, 0]}>
-        <cylinderGeometry args={[0.92, 0.92, 2.7, 48, 1, true]} />
-        <meshPhysicalMaterial
-          color="#bde8f1"
-          transparent
-          opacity={0.18}
-          roughness={0.12}
-          metalness={0.05}
-          depthWrite={false}
-          side={2}
-        />
+      <mesh position={[0, 2.12, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.98, 0.98, 2.95, 48, 1, true]} />
+        <TechnicalGlassMaterial opacity={0.2} />
       </mesh>
-
-      {[0.68, 1.82, 2.96].map((height) => (
-        <mesh key={height} position={[0, height, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[1.04, 0.105, 16, 48]} />
-          <meshStandardMaterial color="#9a7449" metalness={0.88} roughness={0.3} />
-        </mesh>
-      ))}
-
-      {[-0.78, 0.78].map((x) => (
-        <mesh key={x} position={[x, 1.82, 0]}>
-          <boxGeometry args={[0.11, 2.36, 0.16]} />
-          <meshStandardMaterial color="#765737" metalness={0.82} roughness={0.36} />
-        </mesh>
-      ))}
-
-      <mesh position={[0, 3.25, 0]}>
-        <cylinderGeometry args={[1.26, 1.08, 0.34, 48]} />
-        <meshStandardMaterial color="#624a33" metalness={0.76} roughness={0.4} />
-      </mesh>
-
-      <mesh position={[0, 3.46, 0]}>
-        <cylinderGeometry args={[0.55, 0.75, 0.18, 32]} />
-        <meshStandardMaterial color="#92704b" metalness={0.85} roughness={0.32} />
-      </mesh>
-
-      <mesh position={[0, 3.1, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[1.25, 0.04, 12, 64]} />
-        <meshStandardMaterial color="#26343a" metalness={0.65} roughness={0.42} />
-      </mesh>
-      {online && (
-        <mesh position={[0, 3.1, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry
-            args={[1.25, 0.057, 12, 64, Math.max(0.035, Math.PI * 2 * syncProgress)]}
-          />
-          <meshStandardMaterial
-            color={BLUE}
-            emissive={BLUE}
-            emissiveIntensity={visualState.activity === "syncing" ? 1.15 : 0.72}
-            roughness={0.3}
-          />
-        </mesh>
-      )}
-
-      <group ref={networkRingRef} position={[0, 1.82, 0]}>
+      <ReactorCage />
+      <ReactorConnectors visualState={visualState} />
+      <group ref={networkAssemblyRef} position={[0, 2.12, 0]}>
         <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[1.43, 0.035, 10, 64]} />
-          <meshStandardMaterial
-            color={networkActive ? BLUE : "#38454a"}
-            emissive={networkActive ? BLUE : "#101719"}
-            emissiveIntensity={networkActive ? 0.95 : 0.04}
-            metalness={0.45}
-            roughness={0.36}
-          />
+          <torusGeometry args={[1.46, 0.032, 10, 64]} />
+          <EnergyMaterial connection={visualState.connection} active={networkActive} intensity={0.76} />
         </mesh>
         <mesh rotation={[0, 0, Math.PI / 2]}>
-          <torusGeometry args={[1.43, 0.035, 10, 64]} />
-          <meshStandardMaterial
-            color={networkActive ? BLUE : "#38454a"}
-            emissive={networkActive ? BLUE : "#101719"}
-            emissiveIntensity={networkActive ? 0.7 : 0.03}
-            metalness={0.45}
-            roughness={0.36}
-          />
+          <torusGeometry args={[1.46, 0.032, 10, 64]} />
+          <EnergyMaterial connection={visualState.connection} active={networkActive} intensity={0.58} />
         </mesh>
       </group>
-
       {(focused || hovered) && (
-        <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[2.35, 0.045, 10, 64]} />
-          <meshStandardMaterial
-            color={focused ? BLUE_WHITE : BLUE}
-            emissive={BLUE}
-            emissiveIntensity={focused ? 0.8 : 0.38}
-            roughness={0.42}
-          />
+        <mesh position={[0, 0.045, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[2.26, 2.33, 64]} />
+          <EnergyMaterial connection="online" active intensity={focused ? 0.72 : 0.32} />
         </mesh>
       )}
-
-      <mesh
-        position={[0, 1.8, 0]}
-        onClick={stopAndFocus}
-        onPointerOver={(event) => {
-          event.stopPropagation();
-          setHovered(true);
-        }}
-        onPointerOut={() => setHovered(false)}
-      >
-        <cylinderGeometry args={[1.75, 1.95, 3.55, 32]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-      </mesh>
+      <SpatialHitTarget
+        position={[0, 2.05, 0]}
+        scale={[3.8, 4.4, 3.8]}
+        onActivate={onFocus}
+        onHoverChange={setHovered}
+      />
     </group>
   );
 }
