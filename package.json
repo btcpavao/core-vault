@@ -5,6 +5,7 @@
   "description": "Prostorno lokalno Tauri sučelje za Bitcoin Core testne mreže",
   "type": "module",
   "scripts": {
+    "asset:reactor": "\"/Applications/Blender.app/Contents/MacOS/Blender\" --background --python art-source/blender/core-reactor/build_core_reactor_v1.py",
     "dev": "vite --port 1420",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",

@@ -122,14 +122,16 @@ export function clonePolishedAuthoredMaterial(source: Material) {
   if (!(material instanceof MeshStandardMaterial)) return material;
 
   if (material.name.includes("Limestone")) {
+    const hero = material.name.includes("Hero");
+    const textures = hero ? WORLD_TEXTURES.limestoneHero : WORLD_TEXTURES.limestone;
     material.color.set(WORLD_MATERIALS.limestone.base);
-    material.map = WORLD_TEXTURES.limestone.baseColor;
-    material.roughnessMap = WORLD_TEXTURES.limestone.roughness;
-    material.normalMap = WORLD_TEXTURES.limestone.normal;
-    material.normalScale.copy(STONE_NORMAL_SCALE);
+    material.map = textures.baseColor;
+    material.roughnessMap = textures.roughness;
+    material.normalMap = textures.normal;
+    material.normalScale.copy(hero ? HERO_STONE_NORMAL_SCALE : STONE_NORMAL_SCALE);
     material.metalness = 0.01;
     material.roughness = 0.88;
-    material.envMapIntensity = 0.7;
+    material.envMapIntensity = hero ? 0.88 : 0.7;
   } else if (material.name.includes("Bronze") || material.name.includes("Dark_Metal")) {
     const precision = material.name.includes("Precision");
     const dark = material.name.includes("Dark_Metal");

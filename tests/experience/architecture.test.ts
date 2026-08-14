@@ -10,6 +10,7 @@ const roomFiles = [
   "src/experience/rooms/EngineRoom/components/CoolingManifold.tsx",
   "src/experience/rooms/EngineRoom/components/EnergyConduit.tsx",
   "src/experience/rooms/EngineRoom/components/NetworkConsole.tsx",
+  "src/experience/rooms/EngineRoom/components/AuthoredCoreReactor.tsx",
   "src/experience/rooms/EngineRoom/components/ReactorEnergyField.tsx",
   "src/experience/rooms/EngineRoom/components/RoomArchitecture.tsx",
 ];
@@ -68,24 +69,78 @@ describe("real-time experience boundary", () => {
     expect(engineRoomSource).not.toMatch(/\.hdr|\.exr|preset=/i);
   });
 
-  it("loads one central-manifest GLB with a room-local passive fallback", () => {
+  it("loads central-manifest GLBs with room-local passive fallbacks", () => {
     const manifestSource = source("src/experience/assets/assetManifest.ts");
-    const loaderSource = source(
+    const coolingLoaderSource = source(
       "src/experience/rooms/EngineRoom/components/CoolingManifold.tsx",
     );
-    const asset = readFileSync(
+    const reactorLoaderSource = source(
+      "src/experience/rooms/EngineRoom/components/AuthoredCoreReactor.tsx",
+    );
+    const coolingAsset = readFileSync(
       resolve(
         process.cwd(),
         "public/assets/experience/engine-room/cv_engine_room_cooling_manifold.glb",
       ),
     );
+    const reactorAsset = readFileSync(
+      resolve(
+        process.cwd(),
+        "public/assets/experience/engine-room/cv_core_reactor_v1.glb",
+      ),
+    );
 
     expect(manifestSource).toContain("cv_engine_room_cooling_manifold.glb");
+    expect(manifestSource).toContain("cv_core_reactor_v1.glb");
     expect(manifestSource).toContain('license: "Core Vault original"');
-    expect(loaderSource).toContain("useGLTF(ENGINE_ROOM_ASSETS.coolingManifold.path)");
-    expect(loaderSource).toContain("CoolingManifoldFallback");
-    expect(asset.subarray(0, 4).toString("ascii")).toBe("glTF");
-    expect(asset.readUInt32LE(4)).toBe(2);
+    expect(coolingLoaderSource).toContain("useGLTF(ENGINE_ROOM_ASSETS.coolingManifold.path)");
+    expect(coolingLoaderSource).toContain("CoolingManifoldFallback");
+    expect(reactorLoaderSource).toContain("useGLTF(ENGINE_ROOM_ASSETS.coreReactor.path)");
+    expect(reactorLoaderSource).toContain("CoreReactorFallback");
+
+    for (const asset of [coolingAsset, reactorAsset]) {
+      expect(asset.subarray(0, 4).toString("ascii")).toBe("glTF");
+      expect(asset.readUInt32LE(4)).toBe(2);
+      expect(asset.readUInt32LE(8)).toBe(asset.byteLength);
+    }
+    expect(reactorAsset.byteLength).toBeLessThan(2.5 * 1024 * 1024);
+  });
+
+  it("keeps the authored Reactor hierarchy and energy semantics explicit", () => {
+    const asset = readFileSync(
+      resolve(
+        process.cwd(),
+        "public/assets/experience/engine-room/cv_core_reactor_v1.glb",
+      ),
+    );
+    const jsonChunkLength = asset.readUInt32LE(12);
+    expect(asset.subarray(16, 20).toString("ascii")).toBe("JSON");
+    const gltf = JSON.parse(asset.subarray(20, 20 + jsonChunkLength).toString("utf8"));
+    const nodeNames = gltf.nodes.map((node: { name?: string }) => node.name);
+    const materialNames = gltf.materials.map((material: { name?: string }) => material.name);
+
+    expect(nodeNames).toEqual(
+      expect.arrayContaining([
+        "CV_Core_Reactor_v1",
+        "Architectural_Base",
+        "Mechanical_Lower_Collar",
+        "Technical_Glass_Containment",
+        "Structural_Frame",
+        "Computational_Core_Assembly",
+        "Radial_Conduit_Assembly",
+        "Upper_Housing",
+      ]),
+    );
+    expect(materialNames).toEqual(
+      expect.arrayContaining([
+        "CV_Limestone_Hero",
+        "CV_Bronze_Structural",
+        "CV_Bronze_Precision",
+        "CV_Dark_Metal",
+        "CV_Technical_Glass",
+        "CV_Energy_Surface_Blue",
+      ]),
+    );
   });
 
   it("provides keyboard-equivalent controls for both spatial targets", () => {
