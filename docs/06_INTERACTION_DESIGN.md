@@ -9,7 +9,7 @@
 - `04_WORLD_BIBLE.md`
 - `05_ROOM_DESIGN.md`
 
-**Applies to:** Pointer interaction, keyboard interaction, object selection, camera behavior, room navigation, focus states, contextual interfaces, drag-and-drop, transaction review, signing, backup, restore, onboarding, accessibility, error recovery, and interaction feedback.
+**Applies to:** Pointer interaction, keyboard interaction, object selection, viewpoint behavior, room navigation, focus states, contextual interfaces, drag-and-drop, transaction review, signing, backup, restore, onboarding, accessibility, error recovery, and interaction feedback.
 
 ---
 
@@ -297,7 +297,7 @@ Use judgment based on action ambiguity.
 
 Focusing an object may trigger:
 
-- gentle camera movement
+- gentle visual/viewpoint focus
 - background de-emphasis
 - local lighting response
 - contextual label
@@ -323,9 +323,9 @@ Security-critical confirmations should require explicit cancellation rather than
 
 ---
 
-# 18. Camera Interaction Philosophy
+# 18. Viewpoint Interaction Philosophy
 
-The camera is part of the interface, but the user should not need to operate it manually.
+The curated viewpoint is part of the interface, but the user should not need to operate a camera manually.
 
 The system decides useful viewpoints.
 
@@ -335,7 +335,7 @@ This distinction is critical.
 
 ---
 
-# 19. Default Camera
+# 19. Default Viewpoint
 
 Each room has a curated default view.
 
@@ -348,9 +348,9 @@ The default view should:
 
 ---
 
-# 20. Camera Focus
+# 20. Viewpoint Focus
 
-When focusing an object:
+When focusing an object, the renderer may use push-in, crop/zoom, parallax, depth shift, integrated lighting, safe de-emphasis, or actual camera movement where 3D exists:
 
 - move only as much as needed
 - preserve spatial orientation
@@ -363,11 +363,11 @@ The movement should communicate:
 
 ---
 
-# 21. Camera Return
+# 21. Viewpoint Return
 
 When focus ends:
 
-the camera returns to a known stable state.
+the viewpoint returns to a known stable state.
 
 Avoid accumulating small arbitrary camera changes over time.
 
@@ -1549,7 +1549,7 @@ Copy success should be visible and restrained.
 
 # 98. Accessibility Interaction Model
 
-Every meaningful 3D object requires semantic DOM equivalence.
+Every meaningful visual object requires semantic DOM equivalence.
 
 A screen reader user should receive:
 
@@ -1566,7 +1566,7 @@ Example:
 
 # 99. Keyboard Focus
 
-Keyboard focus must be visible inside the 3D world.
+Keyboard focus must be visible inside the authored world and must feel like a restrained response of the existing object or its environment, not a generic neon sticker.
 
 Possible techniques:
 

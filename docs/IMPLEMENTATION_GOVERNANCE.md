@@ -496,7 +496,7 @@ for testing.
 
 ---
 
-# 23. Renderer Migration Gate
+# 23. Renderer Migration Gate — Decision Reached
 
 The immersive renderer phase begins only after:
 
@@ -505,30 +505,34 @@ The immersive renderer phase begins only after:
 - fundamental Core boundary is sufficiently understood
 - immediate critical/high security boundary is under control
 
-Then the rendering migration begins.
+Those prerequisites were satisfied and the Engine Room full-3D architecture proof was completed. The human-review gate has now produced an architectural decision: full real-time 3D remains technically viable, but is no longer mandatory for every room because its fidelity cost and iteration speed are unacceptable under current constraints.
+
+The active direction is the renderer-neutral Cinematic 2.5D Scene System recorded in `RENDERER_DIRECTION_DECISION.md`.
 
 ---
 
-# 24. Renderer Migration Begins With Architecture Proof
+# 24. Current Renderer Proof
 
-The first renderer implementation does **not** build all rooms.
+The historical first renderer implementation created one full-3D Engine Room architecture proof. Its domain, runtime, interaction, accessibility, and performance work remains valid evidence.
 
-It creates:
+The current next step creates:
 
-> **one proof-of-architecture Engine Room.**
+> **one Engine Room cinematic 2.5D Proof of Fidelity.**
 
 That proof must include:
 
-- real Three.js/R3F scene
-- actual perspective camera
-- real geometry
-- realistic lighting capability
+- one near-final-fidelity authored master scene
+- depth and curated viewpoint behavior
+- integrated semantic state, lighting, and emissive layers
+- selective Three.js/R3F/geometry/shaders only where useful
 - semantic interactive Reactor
 - contextual DOM precision panel
 - keyboard accessibility
 - Reduced Motion
 - Visual State Adapter
 - real NodeStatus driving Reactor state
+- truthful offline, syncing, ready, network-disabled, and real new-block states
+- no sticker-like overlays
 
 ---
 
@@ -536,8 +540,8 @@ That proof must include:
 
 The Engine Room proves all essential experience concepts at once:
 
-- scene
-- camera
+- coherent scene composition
+- curated viewpoint
 - object
 - interaction
 - domain state
@@ -549,43 +553,30 @@ The Engine Room proves all essential experience concepts at once:
 
 If Engine Room cannot satisfy the vision, do not build seven more rooms.
 
-Fix the architecture first.
+Prove the new scene pipeline first.
 
 ---
 
-# 26. No Final Art in Initial Engine Room Proof
+# 26. Near-Final Art Is Required in the Current Proof
 
-The first Engine Room may use:
-
-- primitives
-- simple materials
-- placeholder Reactor geometry
-
-provided it proves:
-
-- space
-- depth
-- camera
-- state
-- interaction
-
-Do not spend large time producing final photorealistic assets before architecture succeeds.
+The initial greybox and full-3D architecture proof are completed historical work. The current risk is visual fidelity, so another greybox is prohibited. The cinematic 2.5D proof must use one near-final Engine Room master scene and demonstrate the integrated semantic states in the running application.
 
 ---
 
 # 27. Human Review Gate After Engine Room
 
-Once the Engine Room proof exists:
+Once the cinematic 2.5D Engine Room proof exists:
 
 STOP.
 
 The user reviews:
 
 - spatial feeling
-- camera
+- viewpoint and focus behavior
 - interaction
 - performance
 - whether it actually feels like being inside the environment
+- whether a normal screenshot approaches the approved reference without sticker-like overlays
 
 Do not automatically continue into Main Hall.
 
@@ -593,7 +584,7 @@ Do not automatically continue into Main Hall.
 
 # 28. Main Hall Comes After Renderer Approval
 
-Once the world architecture is approved:
+Only after the cinematic 2.5D Engine Room proof passes human fidelity review:
 
 build Main Hall.
 
@@ -1032,26 +1023,13 @@ Codex must stop and ask rather than guess if it encounters:
 From the present repository state, the planned sequence is:
 
 ```text
-1. Implementation Governance
-2. Isolated Regtest harness
-3. Golden Personal Vault recovery test
-4. Review findings
-5. Fix immediate security/domain boundary issues one by one
-6. Golden Personal Vault transaction test
-7. Golden 2-of-3 test foundation
-8. Real-time experience shell
-9. Engine Room proof of architecture
-10. Human visual/interaction review
-11. Main Hall
-12. Workshop
-13. Personal Vault immersive vertical slice
-14. Archive
-15. Communications
-16. Hardened multisig experience
-17. Observatory
-18. Library
-19. Production art
-20. Broader Bitcoin functionality
+1. Preserve the proven Bitcoin/domain and Visual State Adapter boundaries
+2. Produce one near-final Engine Room cinematic 2.5D master scene
+3. Integrate semantic Reactor and truthful Core states
+4. Validate contextual NodeStatus UI, keyboard access, and Reduced Motion
+5. Validate desktop performance and visual-state determinism
+6. Pass human screenshot/fidelity review
+7. Plan one next room only after that gate
 ```
 
 This sequence may evolve based on evidence.
@@ -1062,11 +1040,11 @@ It must not be silently skipped.
 
 # 51. The Very Next Coding Task
 
-After this governance document is committed, the next Codex implementation task is:
+The next implementation task is:
 
-> **Implement a reproducible isolated Bitcoin Core Regtest integration harness and use it to create the first golden Personal Vault recovery integration test.**
+> **Engine Room cinematic 2.5D Proof of Fidelity.**
 
-Do not begin renderer work before this test is complete and reviewed.
+Do not begin another room or broaden the renderer migration before this proof is complete and reviewed.
 
 ---
 

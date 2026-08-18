@@ -1,14 +1,18 @@
-# Blender authored-asset workflow
+# Blender optional authored-3D asset workflow
+
+Blender remains a supported source tool, not a mandatory pipeline for every Core Vault room. Use it where actual geometry has clear value: hero props, selective real-time assets, reference rendering, depth generation, semantic/lighting masks, source art, or future objects that benefit from real 3D.
+
+The existing Reactor and Engine Room work is legitimate historical and technical evidence. It remains reusable under the renderer-neutral Cinematic 2.5D Scene System and must not be described as wasted or incorrect.
 
 ## Local tool assumption
 
-Core Vault's first authored 3D pipeline targets Blender 5.2 LTS at:
+Core Vault's existing authored-3D pipeline targets Blender 5.2 LTS at:
 
 ```text
 /Applications/Blender.app/Contents/MacOS/Blender
 ```
 
-The Reactor build runs headlessly through Blender Python. It makes no network request and has no external texture or model dependency.
+The Reactor build runs headlessly through Blender Python. It makes no network request and has no external texture or model dependency. Future cinematic scene packages may use Blender differently or not at all.
 
 ## Source and runtime locations
 
@@ -70,4 +74,4 @@ Any increase beyond these guardrails needs visual evidence from the real Tauri W
 
 Core Reactor v1 is **Core Vault original**. Future authored or texture assets must record creator/source, licence, permitted redistribution, and required attribution before entering the runtime asset directory. An unclear licence is a hard stop; do not import the asset.
 
-Third-party assets must never be fetched at runtime. Runtime presentation assets remain local, replaceable, and outside wallet, RPC, and signing authority.
+Third-party assets must never be fetched at runtime. Runtime presentation assets remain local, replaceable, and outside wallet, RPC, and signing authority. GLB export is one valid output, not a universal room requirement.

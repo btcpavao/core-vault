@@ -73,6 +73,24 @@ The following pattern is explicitly rejected:
 
 That is not Core Vault.
 
+The rejected pattern is:
+
+```text
+static artwork
++ unrelated overlay UI
+```
+
+The approved cinematic scene pattern is:
+
+```text
+authored high-fidelity scene
++ integrated semantic scene layers
++ state-driven environmental changes
++ contextual precision UI
+```
+
+Authored imagery is allowed when it performs real interface work inside a semantic scene package. The deciding question is not whether an image participates in rendering. The deciding question is whether the resulting environment is interactive, truthful, spatially coherent, and visually integrated.
+
 Reference artwork is used to understand:
 
 - architecture
@@ -83,7 +101,7 @@ Reference artwork is used to understand:
 - spatial composition
 - object language
 
-It must not become wallpaper behind a generic interface.
+It must not become wallpaper behind a generic interface. Scene layers, masks, effects, hit regions, and contextual UI must relate to the same authored perspective, light, materials, atmosphere, and composition.
 
 The correct process is:
 
@@ -515,9 +533,9 @@ The spatial model must remain usable even with nearly all movement disabled.
 
 ---
 
-# 20. Camera Movement Must Never Fight the User
+# 20. Viewpoint Movement Must Never Fight the User
 
-Camera movement is used to create spatial continuity.
+Viewpoint movement is used to create spatial continuity. It may be implemented as camera motion, controlled push-in, crop/zoom, parallax, depth shift, foreground occlusion, or a restrained lighting transition.
 
 It must not become a spectacle.
 
@@ -556,6 +574,8 @@ It should communicate:
 Not:
 
 > “The page refreshed.”
+
+A transition does not need a physically moving perspective camera or complete volumetric room. It does need curated viewpoints and a spatial transition that preserves orientation. Reduced Motion may use a brief crossfade or other minimal change without losing place identity.
 
 ---
 

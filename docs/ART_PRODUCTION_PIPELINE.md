@@ -1,8 +1,8 @@
 # Core Vault — Art Production Pipeline
 
-**Status:** Required production standard  
-**Applies to:** All immersive 3D environments, hero objects, environmental assets, lighting and presentation inside Core Vault  
-**Primary stack:** Blender → glTF/GLB → React Three Fiber / Three.js → Tauri  
+**Status:** Required fidelity standard; optional full-3D workflow
+**Applies to:** Cinematic scene environments, selective 3D, hero objects, environmental assets, lighting and presentation inside Core Vault
+**Renderer direction:** Semantic scene package → renderer/compositor → Tauri, with Blender, glTF/GLB and React Three Fiber / Three.js used selectively
 **Project principle:** Visual fidelity is a product requirement, not optional polish.
 
 ---
@@ -13,15 +13,15 @@ Core Vault is not intended to look like a conventional web application with a de
 
 Its spatial environments are part of the product itself.
 
-Rooms such as the Engine Room, Key Chamber, Recovery Archive and future spaces must feel like coherent, believable, physically constructed environments with the visual quality of a high-end real-time interactive experience.
+Rooms such as the Engine Room, Key Chamber, Recovery Archive and future spaces must feel like coherent, believable, physically constructed environments with the visual quality of a high-end cinematic interactive experience.
 
 The generated concept/reference artwork establishes the intended visual language.
 
-The runtime implementation must therefore aim to reproduce the reference artwork **as closely as reasonably possible in real time**, rather than merely taking inspiration from it.
+The runtime implementation must therefore aim to reproduce the reference artwork **as closely as reasonably possible in the running experience**, rather than merely taking inspiration from it.
 
 The expected relationship is:
 
-> **Reference artwork → authored 3D reconstruction → optimized real-time representation**
+> **Reference artwork → coherent authored semantic scene package → optimized interactive representation**
 
 Not:
 
@@ -60,7 +60,7 @@ The goal is not vague similarity.
 
 The target is:
 
-> **Near-reference fidelity with only those compromises required by real-time rendering, interaction and performance.**
+> **Near-reference fidelity with only those compromises required by interaction, packaging and performance.**
 
 A simplified scene that technically represents the same objects but loses the reference's realism, depth, material quality or atmosphere does **not** satisfy this requirement.
 
@@ -68,7 +68,7 @@ A simplified scene that technically represents the same objects but loses the re
 
 # 3. Reference Image Contract
 
-Before 3D production begins, every room requires an approved reference image.
+Before scene production begins, every room requires an approved reference image.
 
 The image must be treated as a specification.
 
@@ -87,21 +87,21 @@ For each reference, record:
 - atmospheric characteristics
 - areas intentionally hidden or left undefined
 
-The 3D scene must contain a camera called:
+Geometry-heavy Blender scenes should retain a camera called:
 
 `CV_HeroCamera`
 
 Its purpose is to reproduce the composition of the approved reference as closely as possible.
 
-During production, comparison against the reference must be performed repeatedly from this camera.
+For every renderer, a canonical viewpoint and crop must reproduce the reference composition and be used for repeated comparison.
 
 ---
 
 # 4. Production philosophy
 
-## 4.1 Blender owns the physical world
+## 4.1 Authored source owns the physical world
 
-Blender is the authoritative environment-authoring tool for:
+Blender is an authoritative tool where actual geometry is valuable, including:
 
 - architecture
 - walls
@@ -125,6 +125,8 @@ Blender is the authoritative environment-authoring tool for:
 
 React Three Fiber must **not** become the primary modeling tool for production-quality rooms.
 
+For cinematic 2.5D rooms, the authoritative source may instead be one coherent master composition plus depth, semantic, state, lighting, and emissive layers. Blender remains valid for reference rendering, depth/mask generation, hero props, and selective geometry. It is not mandatory for every room.
+
 Three.js primitives may still be used for:
 
 - debugging
@@ -141,7 +143,7 @@ But the final visible environment should primarily originate from authored asset
 
 ## 4.2 Runtime owns behavior
 
-React Three Fiber / Three.js owns:
+The renderer/compositor owns:
 
 - interaction
 - camera movement
@@ -160,7 +162,7 @@ React Three Fiber / Three.js owns:
 
 This separation is intentional.
 
-### Blender
+### Authored scene source
 
 **What the world is.**
 
@@ -200,7 +202,7 @@ A room whose geometry and lighting do not work without effects is not ready for 
 
 # 6. Production stages
 
-Every room follows the same production stages.
+Every room follows an evidence-based production sequence appropriate to its renderer. The Blender stages below remain the required workflow for complete authored-3D work, not a universal requirement for every cinematic 2.5D room.
 
 No stage should be skipped.
 
@@ -564,7 +566,7 @@ Repeat until the scene clearly belongs to the same visual world.
 
 # 14. Stage 8 — Blender quality gate
 
-The room must pass a Blender-only quality gate **before runtime integration**.
+A complete authored-3D room must pass a Blender-only quality gate **before runtime integration**. A cinematic 2.5D room instead requires an equivalent master-composition and semantic-layer quality gate.
 
 This is critical.
 
@@ -586,7 +588,7 @@ Not:
 
 # 15. Stage 9 — Runtime optimization
 
-Only after visual approval begins the real-time optimization pass.
+Only after visual approval begins the runtime optimization pass.
 
 Optimization must preserve the visual result as much as possible.
 
@@ -917,7 +919,7 @@ The environment should feel constructed to last decades rather than designed aro
 
 The following approaches should not be used as substitutes for proper environment production:
 
-- building final rooms primarily from Three.js primitives
+- building final rooms primarily from uncomposed Three.js primitives or disconnected DOM/CSS/vector layers
 - compensating for weak geometry with bloom
 - compensating for weak materials with emissive colors
 - adding random machinery purely to create complexity
@@ -1024,7 +1026,7 @@ The current approved Hero Reference Image is:
 
 `docs/references/engine-room/engine-room-hero-reference.png`
 
-All future Engine Room Blender reconstruction and visual validation must use this file as the canonical reference.
+All future Engine Room scene production and visual validation must use this file as the canonical reference.
 
 Its existing work should be preserved where it contains valuable:
 
@@ -1189,7 +1191,7 @@ Optimization decisions must be driven by profiling.
 
 ## ER-12 — Completion
 
-Engine Room becomes the visual baseline for subsequent Core Vault environments.
+Once its cinematic 2.5D proof passes human review, Engine Room becomes the visual baseline for subsequent Core Vault environments.
 
 Future rooms must equal or exceed its production quality.
 
@@ -1218,7 +1220,7 @@ This prevents repeating a flawed workflow across the entire product.
 
 # 32. Automation / Codex guidance
 
-Any coding or autonomous agent working on Core Vault 3D production should read this document before modifying a production environment.
+Any coding or autonomous agent working on Core Vault scene production should read this document and `RENDERER_DIRECTION_DECISION.md` before modifying a production environment.
 
 Agents must not interpret requests such as:
 

@@ -11,7 +11,7 @@
 - `06_INTERACTION_DESIGN.md`
 - `07_BITCOIN_CORE_INTEGRATION.md`
 
-**Applies to:** 3D art, environment design, architecture, materials, lighting, color, modelling, shaders, VFX, animation, cinematography, UI integration, typography, sound, ambience, asset production, visual QA, and all future Core Vault visual content.
+**Applies to:** Cinematic scene art, 2.5D and selective 3D, environment design, architecture, materials, lighting, color, compositing, modelling, shaders, VFX, animation, cinematography, UI integration, typography, sound, ambience, asset production, visual QA, and all future Core Vault visual content.
 
 ---
 
@@ -65,7 +65,7 @@ It should look close enough to reality that the user feels they could physically
 
 Core Vault should target:
 
-> **high-end real-time architectural visualization / cinematic game-environment quality**
+> **high-end architectural visualization / cinematic interactive environment quality**
 
 rather than:
 
@@ -74,14 +74,14 @@ rather than:
 - stylized low-poly
 - cartoon rendering
 - generic web graphics
-- painterly 2D backgrounds
+- low-fidelity or disconnected painted backgrounds
 
 The desired result should visually sit closer to:
 
-- modern high-end real-time games
+- modern high-end cinematic and real-time interactive scenes
 - architectural visualization
 - cinematic museum installations
-- premium interactive 3D experiences
+- premium interactive environmental experiences
 
 than ordinary application UI.
 
@@ -134,7 +134,7 @@ They establish a design lineage involving:
 
 These references are **concept art references**.
 
-They are not production backgrounds.
+They are not wallpaper for a generic interface. Original, function-specific authored scene art may be used in production when it is decomposed and integrated as a semantic scene package.
 
 ---
 
@@ -154,7 +154,9 @@ Instead:
 3. extract lighting language
 4. extract shapes
 5. extract energy treatment
-6. design a new original 3D environment specifically for Core Vault functionality
+6. design a new original cinematic scene specifically for Core Vault functionality
+
+The production scene may use authored raster layers, depth, masks, compositing, shaders, and selective geometry. It must not reuse concept art as a flat background with unrelated controls.
 
 ---
 
@@ -162,7 +164,7 @@ Instead:
 
 A screenshot of Core Vault should initially look like:
 
-> a frame from a sophisticated interactive 3D environment
+> a frame from a sophisticated cinematic interactive environment
 
 rather than:
 
@@ -2010,7 +2012,7 @@ from reference products.
 
 ---
 
-# 126. Concept Art Workflow
+# 126. Authored Scene Workflow
 
 Concept imagery can be created to define:
 
@@ -2020,13 +2022,11 @@ Concept imagery can be created to define:
 - lighting
 - mood
 
-Then translate approved designs into real production assets.
-
-Concept image ≠ runtime environment.
+Then translate approved designs into a coherent local semantic scene package. A concept image is not automatically a runtime environment; production requires sufficient resolution, provenance, depth relationships, semantic masks/layers, state coverage, interaction mapping, and integration proof.
 
 ---
 
-# 127. 3D Modelling Workflow
+# 127. Optional 3D Modelling Workflow
 
 Recommended source tool:
 
@@ -2047,9 +2047,9 @@ Asset stages:
 
 ---
 
-# 128. Blockout First
+# 128. Prove the Highest-Risk Assumption First
 
-Before high-detail modelling:
+For geometry-heavy work, a blockout may prove scale, viewpoint, navigation, object positions, panel safe areas, and transition paths before detailed modelling. For the approved Engine Room cinematic 2.5D proof, the highest-risk assumption is visual fidelity; that proof must begin from one near-final master scene rather than another greybox.
 
 prove:
 
@@ -2066,17 +2066,17 @@ Do not invest heavily in beautiful models before interaction works.
 
 ---
 
-# 129. Greybox Acceptance
+# 129. Composition and Semantic Acceptance
 
-A room greybox should already answer:
+A room's approved composition should answer:
 
 - where user is
 - where focal object sits
 - how user navigates
 - where contextual UI appears
-- how camera moves
+- how viewpoint/focus transitions work
 
-Only then proceed to final art.
+It must also identify semantic objects, state masks/layers, safe interaction regions, and the contextual UI relationship before scaling production.
 
 ---
 
@@ -2328,6 +2328,8 @@ Recommended character:
 
 Avoid giant floating hologram look.
 
+The same integrated-scene rule applies to every state layer: perspective, light direction, reflected light, glass response, material response, atmosphere, and depth order must remain coherent. Do not place flat vector energy or a generic neon outline over an otherwise physical object.
+
 ---
 
 # 146. Transaction Review Art Direction
@@ -2497,13 +2499,15 @@ Use dynamic for:
 
 ---
 
-# 158. Scene LOD
+# 158. Scene Quality Scaling
 
-Large/distant environments should use:
+Large/distant environments may use:
 
 - LOD
 - simplified geometry
 - texture scaling
+- layer resolution scaling
+- selective effect or geometry reduction
 
 The user does not need hero-quality geometry on a distant arch.
 
@@ -2701,9 +2705,9 @@ Do not allow individual room art direction to drift.
 
 ---
 
-# 169. Real-Time Test
+# 169. Runtime Scene Test
 
-Static screenshots are insufficient.
+A still screenshot is a primary fidelity gate but is not sufficient by itself.
 
 Review scenes:
 
@@ -2915,11 +2919,11 @@ Hide all DOM panels.
 
 If what remains is:
 
-> one flat image with animated overlays
+> wallpaper with unrelated animated overlays
 
 the implementation is wrong.
 
-What remains must be a real spatial scene containing actual interactive objects.
+What remains must be one authored visual environment containing semantic interactive objects and integrated state layers. A layered 2.5D scene is valid when the Reactor, conduits, light, glass, atmosphere, and depth respond as parts of the same composition.
 
 ---
 
@@ -2927,7 +2931,7 @@ What remains must be a real spatial scene containing actual interactive objects.
 
 Ask:
 
-> Could this plausibly be a location inside a visually sophisticated modern game?
+> Could this plausibly be a location inside a visually sophisticated cinematic interactive experience?
 
 If no:
 spatial fidelity may be insufficient.

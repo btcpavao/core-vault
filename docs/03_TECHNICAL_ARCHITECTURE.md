@@ -6,7 +6,7 @@
 - `01_VISION_AND_PHILOSOPHY.md`
 - `02_DESIGN_PRINCIPLES.md`
 
-**Applies to:** Desktop application architecture, Bitcoin Core integration boundaries, real-time rendering, scene system, application state, security boundaries, asset architecture, testing, packaging, performance, and future implementation decisions.
+**Applies to:** Desktop application architecture, Bitcoin Core integration boundaries, experience rendering, semantic scene systems, application state, security boundaries, asset architecture, testing, packaging, performance, and future implementation decisions.
 
 ---
 
@@ -60,11 +60,11 @@ Responsible for human interaction.
 It contains:
 
 - rooms
-- camera
-- scene graph
-- 3D objects
-- materials
-- lighting
+- curated viewpoints and focus anchors
+- semantic scene state
+- authored scene layers and optional scene graphs
+- semantic visual objects
+- materials, compositing, lighting, and optional geometry
 - animation
 - audio
 - environmental state
@@ -153,67 +153,57 @@ The user should be able to operate Core Vault entirely with their local Bitcoin 
 
 # 6. Rendering Direction
 
-The primary Core Vault world must use a **real-time scene renderer**.
+The primary Core Vault world uses a **renderer-neutral Experience System**. A conventional DOM/CSS application shell is not sufficient as the primary experience layer, but complete real-time 3D geometry is no longer a foundational requirement.
 
-A conventional DOM/CSS application shell is not sufficient as the primary experience layer.
+The approved conceptual architecture is:
 
-The preferred rendering architecture is:
+```text
+Bitcoin / Application Domain
+        ↓
+Visual State Adapter
+        ↓
+Semantic Scene State
+        ↓
+Experience Renderer
+        ↓
+Contextual Precision UI
+```
 
-- Three.js
-- React Three Fiber
-- TypeScript
-- WebGL/WebGPU where supported through the selected renderer
-- glTF / GLB assets
-- physically based materials
-- real-time lighting
-- controlled post-processing
-- spatial audio where appropriate
+The Experience Renderer may combine:
 
-The exact rendering implementation may evolve, but the product must use a scene architecture capable of:
+- layered 2D and cinematic 2.5D;
+- high-resolution authored scene imagery;
+- depth maps, foreground layers, and controlled parallax;
+- semantic object, state, lighting, and emissive masks;
+- WebGL compositing and shaders;
+- selective Three.js / React Three Fiber scenes;
+- selective glTF / GLB geometry;
+- Canvas, CSS, and DOM where each is appropriate;
+- local audio and metadata.
 
-- perspective
-- depth
-- camera motion
-- dynamic lighting
-- interactive objects
-- scene composition
-- real object animation
-- procedural state changes
-- realistic materials
-
-The application should feel like a lightweight real-time interactive environment.
+No single renderer or asset format is mandatory for every room. The simplest local, auditable architecture capable of achieving the approved experience and fidelity should be used.
 
 ---
 
-# 7. Why a Real-Time Renderer Is Required
+# 7. Why an Experience Renderer Is Required
 
-The previous prototype demonstrated that:
+The previous prototype demonstrated that static artwork used as wallpaper, unrelated CSS/vector overlays, and conventional card layouts cannot deliver the intended experience. The Engine Room full-3D proof later demonstrated that complete real-time geometry is technically viable but too costly to iterate to the approved fidelity under current constraints.
 
-- static background images
-- CSS overlays
-- vector animation over illustrations
-- conventional card layouts
+The required product experience depends on coherent perspective and depth relationships, semantic object focus, architectural continuity, believable light response, embedded state changes, accessibility, and contextual precision. These are authored-scene problems. They may be solved through cinematic compositing, selective real-time rendering, or a deliberate hybrid.
 
-cannot deliver the intended experience.
+A scene must never read as:
 
-The required product experience depends on:
+```text
+beautiful background + unrelated software graphics + SVG glow + floating cards
+```
 
-- actual depth
-- controlled camera perspective
-- object focus
-- architectural space
-- lighting relationships
-- realistic object presence
-- visual continuity between rooms
-- animated state embedded in objects
-
-These are scene problems, not conventional webpage layout problems.
+It must behave and appear as one authored visual environment.
 
 ---
 
 # 8. Core Vault Is Not a Full Game Engine Project
 
-Using real-time 3D does not mean Core Vault should become a conventional video game codebase.
+Using cinematic scene rendering or selective real-time 3D does not mean Core Vault should become a conventional video game codebase.
 
 Do not introduce:
 
@@ -227,7 +217,7 @@ Do not introduce:
 - quest systems
 - game progression
 
-The real-time renderer exists to provide:
+The Experience Renderer exists to provide:
 
 - spatial presence
 - object interaction
@@ -260,29 +250,19 @@ This creates the presence of a 3D world without creating the usability burden of
 
 ---
 
-# 10. Camera Model
+# 10. Viewpoint Model
 
-Core Vault should use a curated camera system.
+Core Vault uses curated viewpoints and spatial transitions rather than requiring physical camera travel through complete geometry.
 
 Each room defines:
 
-- default camera position
-- default camera target
-- object focus positions
-- exit transition positions
-- contextual interaction positions
+- a default viewpoint and composition;
+- semantic object focus anchors;
+- exit and destination transition anchors;
+- safe contextual UI regions;
+- depth, crop, parallax, and occlusion limits.
 
-The camera may:
-
-- dolly
-- pan
-- orbit slightly
-- change focus
-- move through architectural transitions
-
-The camera must not behave unpredictably.
-
-The user should never be required to manually align the camera to perform a Bitcoin operation.
+A viewpoint transition may use controlled push-in, crop/zoom, parallax, depth-aware movement, foreground occlusion, light transition, crossfade, selective perspective movement, or an actual 3D camera where useful. It must remain predictable, preserve orientation, and never require manual camera alignment for a Bitcoin operation.
 
 ---
 
@@ -322,12 +302,11 @@ Each scene owns:
 
 - scene composition
 - room-specific assets
-- local lights
-- environment
-- interactive hotspots
+- authored visual layers, optional geometry, and local lighting/compositing data
+- semantic interaction regions with accessible object identity
 - room animation
 - room audio
-- camera anchors
+- viewpoint and focus anchors
 
 It does not own Bitcoin Core logic.
 
@@ -340,7 +319,7 @@ The following systems should be shared across scenes:
 ```text
 experience/
   world/
-    CameraSystem
+    ViewpointSystem
     SceneRouter
     TransitionSystem
     InteractionSystem
@@ -377,7 +356,7 @@ The router determines:
 
 - destination scene
 - transition animation
-- camera path
+- viewpoint transition
 - scene preload requirements
 - active audio environment
 - which objects require data
@@ -395,7 +374,7 @@ A room transition should follow roughly:
 1. user activates a semantic exit
 2. interaction is temporarily locked
 3. destination assets are preloaded if necessary
-4. camera transition begins
+4. viewpoint transition begins
 5. outgoing ambience fades
 6. architectural transition occurs
 7. destination scene becomes active
@@ -408,40 +387,17 @@ Reduced Motion mode replaces cinematic movement with a minimal transition.
 
 ---
 
-# 15. World Coordinates Must Be Meaningful
+# 15. Spatial Relationships Must Be Meaningful
 
-Scene objects should not be arbitrarily positioned without structure.
-
-Each room should define:
-
-- coordinate system
-- functional zones
-- camera-safe area
-- interaction-safe area
-- foreground occlusion limits
-- UI projection regions
-
-This becomes especially important when contextual UI must visually originate from a 3D object.
+Scene elements and interaction regions must not be positioned arbitrarily. Each room defines functional zones, depth order, interaction-safe areas, foreground occlusion limits, viewpoint-safe crops, and contextual UI regions. Where geometry exists, meaningful coordinates remain required. Where layers and masks are used, their registration to the master composition is the equivalent contract.
 
 ---
 
-# 16. 3D Asset Standard
+# 16. Scene Asset Standard
 
-Primary interactive assets should use glTF / GLB where possible.
+Primary interactive objects must expose stable semantic identity independent of their rendering format. A scene package may use registered masks, layers, metadata, named shader inputs, or named glTF/GLB nodes. Do not make application logic dependent on pixel coordinates, unnamed mesh indices, arbitrary invisible hotspots, or incidental file ordering.
 
-This provides:
-
-- PBR materials
-- animation clips
-- efficient loading
-- hierarchy
-- named nodes
-- compression support
-- broad tooling compatibility
-
-Do not make application logic dependent on unnamed mesh indices.
-
-Important objects must expose stable semantic node names.
+Important objects must expose stable semantic names.
 
 Example:
 
@@ -456,7 +412,7 @@ Vault_EnergyRing
 
 ---
 
-# 17. Semantic Asset Contracts
+# 17. Semantic Scene Contracts
 
 Interactive objects must define a semantic contract.
 
@@ -479,13 +435,13 @@ OuterShell
 StatusLight
 ```
 
-Application animation should target semantic elements rather than fragile mesh positions.
+Application state and animation should target semantic elements rather than fragile mesh positions or raw mask coordinates.
 
 ---
 
 # 18. Asset Independence
 
-Business logic must not depend on a particular 3D model.
+Business logic must not depend on a particular image, mask, shader, or 3D model.
 
 If the Vault model is later replaced with better artwork, wallet functionality must continue working.
 
@@ -520,12 +476,12 @@ Bitcoin/Application Domain
         ↓
 Visual State Adapter
         ↓
-Scene State
+Semantic Scene State
         ↓
-3D Object State
+Experience Renderer / Compositor
 ```
 
-This prevents 3D components from directly interpreting raw Bitcoin Core responses.
+This prevents rendering components from directly interpreting raw Bitcoin Core responses.
 
 ---
 
@@ -559,7 +515,7 @@ The scene never needs to understand the RPC itself.
 
 # 21. Strict Domain Boundary
 
-3D scene components must not call:
+Experience rendering components must not call:
 
 - raw Bitcoin RPC
 - filesystem APIs
@@ -971,9 +927,9 @@ This provides consistency between:
 
 ---
 
-# 39. Raycasting
+# 39. Semantic Hit Testing
 
-Pointer interaction may use renderer raycasting.
+Pointer interaction may use renderer raycasting, semantic masks, registered interaction maps, DOM hit regions, or another renderer-appropriate method.
 
 However, raycast hits should resolve to semantic interactive objects.
 
@@ -982,27 +938,27 @@ Do not place Bitcoin logic inside raycast callbacks.
 Correct:
 
 ```text
-raycast → semantic object → interaction command
+hit test → semantic object → interaction command
 ```
 
 not:
 
 ```text
-raycast → RPC call
+raw pixel/mesh hit → RPC call
 ```
 
 ---
 
 # 40. Interaction Hit Areas
 
-Important objects should have simplified invisible interaction colliders or hit meshes.
+Important objects should have stable semantic hit regions. These may be simplified colliders, hit meshes, registered mask regions, or accessible DOM controls aligned to the authored composition.
 
 This provides:
 
 - larger click targets
 - stable interaction
 - improved performance
-- independence from complex render geometry
+- independence from complex render geometry or incidental pixels
 
 ---
 
@@ -1012,8 +968,8 @@ Selecting an object should enter a predictable focus state.
 
 Focus may trigger:
 
-- camera movement
-- local lighting change
+- viewpoint movement or controlled crop/parallax
+- integrated local lighting or compositing change
 - object animation
 - contextual UI
 - accessible description
@@ -1046,7 +1002,7 @@ The Scene Router remains the source of navigation truth.
 
 Immersive rendering must not make Core Vault inaccessible.
 
-Important 3D objects should have corresponding semantic DOM representations.
+Important visual objects should have corresponding semantic DOM representations.
 
 The user should be able to navigate important objects through:
 
@@ -1058,9 +1014,9 @@ The accessibility layer should describe function and state, not merely visual ap
 
 ---
 
-# 44. Render Loop
+# 44. Rendering Lifecycle
 
-The render loop must not indiscriminately recompute all application state.
+No render loop, compositor update, or animation scheduler may indiscriminately recompute all application state.
 
 Bitcoin state updates and scene rendering should remain logically independent.
 
@@ -1275,7 +1231,7 @@ Material definitions should be reusable across the world.
 
 ---
 
-# 55. Design Tokens Extend Into 3D
+# 55. Design Tokens Extend Into the Scene
 
 The design system should define more than CSS colors.
 
@@ -1285,7 +1241,7 @@ It should also define:
 - emissive intensity ranges
 - light temperatures
 - animation timing
-- world scale
+- world scale and depth conventions
 - interaction glow
 - warning behavior
 - scene fog
@@ -1411,7 +1367,7 @@ Reduced Motion/Accessibility modes may disable camera-driven depth effects.
 
 # 63. Animation System
 
-Object animation should be driven by named semantic states.
+Object and layer animation should be driven by named semantic states.
 
 Example:
 
@@ -1425,14 +1381,14 @@ KeyState.ERROR
 
 Each state defines:
 
-- animation clip
+- animation clip, mask/layer response, or shader response
 - emissive behavior
 - sound
 - optional particle response
 
 Bitcoin logic sets the state.
 
-The 3D component renders it.
+The Experience Renderer renders it.
 
 ---
 
@@ -2212,16 +2168,16 @@ Exact tooling depends on the existing build system.
 
 ---
 
-# 110. Asset Pipeline
+# 110. Experience Scene Asset Pipeline
 
-The project should eventually standardize:
+The project should prove and then standardize:
 
 1. asset creation
-2. Blender or equivalent source
+2. authored source and provenance
 3. optimization
-4. export to GLB
-5. compression
-6. semantic node validation
+4. export of the selected local scene-package formats
+5. compression and resolution budgets
+6. semantic layer, mask, metadata, or node validation
 7. application import
 8. visual QA
 
@@ -2229,7 +2185,7 @@ Keep source assets separate from runtime optimized assets.
 
 ---
 
-# 111. Blender Is Recommended for World Asset Authoring
+# 111. Blender Is an Optional Authored-3D Workflow
 
 A future art workflow may use Blender for:
 
@@ -2240,12 +2196,16 @@ A future art workflow may use Blender for:
 - animation
 - baking
 - GLB export
+- reference rendering
+- depth and mask generation
+- selective hero geometry
+- high-fidelity source art
 
 The runtime application should not depend on Blender.
 
 ---
 
-# 112. Procedural Assets May Be Used During Development
+# 112. Development Assets Must Target the Risk Being Proved
 
 Early implementation may use:
 
@@ -2258,9 +2218,11 @@ provided the architecture is designed so final art can replace them cleanly.
 
 Do not mistake placeholders for final design.
 
+The next Engine Room proof is specifically a fidelity proof, so another greybox is not sufficient for that task.
+
 ---
 
-# 113. Do Not Use AI-Generated Flat Images as the Final World
+# 113. Authored Imagery Is Not Wallpaper
 
 Image generation may be useful for:
 
@@ -2269,25 +2231,25 @@ Image generation may be useful for:
 - composition studies
 - moodboards
 
-But if the final experience requires camera movement and 3D object interaction, flattened images cannot be the core runtime representation.
-
-They should guide 3D asset creation rather than substitute for it.
+Authored raster imagery may be part of a final cinematic scene package when it is high resolution, licensed, locally stored, semantically decomposed where required, and integrated with truthful state, depth, light, and interaction. A single flattened image behind unrelated controls is not an acceptable final world.
 
 ---
 
-# 114. Hybrid 2.5D Is Allowed Selectively
+# 114. Cinematic 2.5D Is an Approved Primary Model
 
-Some distant scenery may use:
+Rooms may use:
 
 - matte backgrounds
 - billboards
 - projected environments
 - skyboxes
-- layered cards
+- authored foreground, mid-ground, and background layers
+- depth maps and semantic masks
+- state-driven lighting and emissive layers
+- controlled crop, parallax, and focus movement
+- selective real-time geometry and shaders
 
-when those elements are not expected to behave like interactive geometry.
-
-Primary rooms and interactive artefacts should retain real spatial presence.
+Interactive artefacts must retain semantic identity, believable physical presence, and truthful response whether represented by layers, shaders, geometry, or a hybrid. All layers must originate from one coherent visual composition.
 
 ---
 
@@ -2467,17 +2429,7 @@ The visual ambition must not create an unmanageable dependency tree.
 
 # 128. Renderer Dependency Strategy
 
-Prefer a small stable rendering stack.
-
-Recommended initial set:
-
-- Three.js
-- React Three Fiber
-- `@react-three/drei` selectively
-- a restrained post-processing library if needed
-- existing state management where suitable
-
-Do not install multiple competing 3D frameworks.
+Prefer the smallest stable rendering stack that proves the required experience. Reuse existing Three.js, React Three Fiber, and `@react-three/drei` where they provide value, but do not make them mandatory for every room. Add a compositing or image pipeline only after the Engine Room proof defines a concrete need. Do not install multiple competing frameworks without an approved architectural reason.
 
 ---
 
@@ -2661,7 +2613,7 @@ Extract/confirm strict domain boundary.
 
 ## Phase 3
 
-Add the real-time renderer alongside the existing frontend.
+Add the renderer-neutral Experience System alongside the existing frontend.
 
 ## Phase 4
 
@@ -2706,33 +2658,23 @@ It may be moved behind a development-only legacy route if needed.
 
 ---
 
-# 142. First Architecture Prototype
+# 142. Current Architecture Evidence
 
-Before building the entire facility, create one technical proof-of-concept that demonstrates:
+The completed Engine Room full-3D vertical slice demonstrated a functioning real-time room, truthful Core state mapping, semantic interaction, contextual DOM precision UI, keyboard access, Reduced Motion, packaging, and acceptable runtime performance. It also demonstrated that full-3D production iteration did not approach the approved visual reference efficiently enough.
 
-- real 3D room
-- realistic lighting
-- interactive 3D object
-- camera focus
-- contextual DOM panel
-- real application state
-- one data-driven animation
-- reduced motion
-- keyboard access
-
-The purpose is to validate the architecture, not final art.
+That evidence closes the original architecture experiment and authorizes the renderer-neutral cinematic 2.5D direction recorded in `RENDERER_DIRECTION_DECISION.md`.
 
 ---
 
-# 143. Recommended Proof Scene: Engine Room
+# 143. Required Proof Scene: Engine Room Cinematic 2.5D
 
-Engine Room is particularly useful because it proves:
+The next proof must demonstrate:
 
-- realistic environment
+- one near-final-fidelity master scene
 - Core data integration
-- real-time animation
+- integrated state-driven animation and light response
 - semantic visual state
-- object focus
+- semantic Reactor focus
 - metrics
 - ambient behavior
 
@@ -2746,35 +2688,36 @@ A Core reactor whose state reflects:
 - synchronized
 - network active
 - network disabled
+- real new-block gold pulse
+- contextual NodeStatus panel
+- keyboard accessibility and Reduced Motion
+- acceptable desktop performance
+- no sticker-like overlays
 
 This demonstrates the entire architectural model.
 
 ---
 
-# 144. Proof-of-Architecture Acceptance Criteria
+# 144. Proof-of-Fidelity Acceptance Criteria
 
-The prototype succeeds only if:
+The proof succeeds only if:
 
 - it does not look like a webpage with a background
-- camera exists in real 3D space
-- reactor exists as real geometry
+- a normal running screenshot approaches the approved visual reference
+- the Reactor is a semantic object embedded in the authored scene
 - reactor visually changes from real application state
 - the user can inspect it
 - a contextual precision panel can appear
 - Core logic remains outside the scene component
 - frame rate remains acceptable
+- offline, syncing, ready, network-disabled, and new-block states remain truthful
+- visible changes share the scene's perspective, light, materials, and atmosphere
 
 ---
 
-# 145. No Final Asset Requirement for Architecture Prototype
+# 145. Near-Final Visual Requirement for the Current Proof
 
-The first prototype may use temporary geometry.
-
-The test is architecture.
-
-Final visual quality comes later.
-
-However, the prototype must already prove that the renderer is capable of achieving the target visual direction.
+The original greybox and full-3D architecture prototypes are historical completed work. The current proof exists specifically to test the visually risky assumption and therefore must begin with a near-final-fidelity Engine Room scene rather than another greybox.
 
 ---
 
@@ -2784,8 +2727,9 @@ Reject an implementation if:
 
 - React cards remain the primary interaction model
 - rooms are static JPEG backgrounds
-- important environment animations are just CSS overlays
-- 3D objects are decorative and buttons still perform all actions
+- important environment animations are unrelated CSS/SVG overlays
+- visual objects are decorative while generic cards perform all actions
+- arbitrary invisible hotspots have no semantic or accessible object identity
 - scene components call raw RPC directly
 - secrets enter renderer state
 - wallet functionality depends on frame rate
@@ -2799,11 +2743,11 @@ Reject an implementation if:
 
 The architecture is successful when:
 
-1. Bitcoin Core logic runs independently of the 3D experience.
+1. Bitcoin Core logic runs independently of the Experience System.
 
 2. The experience receives semantic state.
 
-3. Real-time 3D scenes define the primary environment.
+3. Semantic cinematic scenes define the primary environment through the simplest suitable renderer.
 
 4. Meaningful objects are interactive.
 

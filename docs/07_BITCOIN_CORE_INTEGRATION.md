@@ -68,7 +68,7 @@ Visual State Adapter
 Core Vault World
 ```
 
-The 3D scene must never call raw Bitcoin RPC directly.
+The experience layer and renderer must never call raw Bitcoin RPC directly.
 
 ---
 
@@ -1918,7 +1918,7 @@ callRpc<T>(method, params)
 
 but this must remain below the domain boundary.
 
-Never expose arbitrary RPC execution to the 3D renderer.
+Never expose arbitrary RPC execution to the experience renderer.
 
 ---
 
@@ -2899,7 +2899,7 @@ backup complete
 → Capsule sealed
 ```
 
-Do not require real 3D rendering to test Bitcoin correctness.
+Do not require experience rendering to test Bitcoin correctness.
 
 ---
 

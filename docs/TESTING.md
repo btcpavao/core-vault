@@ -14,6 +14,23 @@ npm run verify
 
 Rust RPC tests bind a temporary loopback port. A restrictive sandbox may require permission for local networking.
 
+## Future cinematic scene QA
+
+The renderer-neutral Experience System must add proof-level QA as it is implemented:
+
+- deterministic tests from domain state through Visual State Adapter to semantic scene state;
+- runtime checks for offline, syncing, ready, network-disabled, and real new-block states;
+- screenshot comparison and visual-regression review at canonical viewpoints;
+- keyboard and screen-reader tests for semantic interaction regions;
+- Reduced Motion tests for transitions, parallax, ambient motion, and state legibility;
+- no-network-asset checks for every packaged scene resource;
+- crop/resolution registration checks for masks and hit regions;
+- packaged desktop performance and decoded-memory measurements;
+- manual high-fidelity review against the approved reference;
+- explicit rejection of sticker-like SVG/CSS effects or contextual UI disconnected from the authored scene.
+
+These requirements do not alter existing Bitcoin/domain tests. They must be implemented with the Engine Room cinematic 2.5D proof, not simulated by changing domain truth.
+
 File-capability unit tests cover valid one-time use, replay rejection, operation mismatch, unknown and expired identifiers, fresh application state, replacement by a newer same-purpose selection, and rejection of existing write destinations. Source-level IPC regression tests also require sensitive commands to accept capability IDs instead of renderer-supplied paths.
 
 Personal Vault mempool-preflight tests require exactly one structurally valid `testmempoolaccept` result with explicit `allowed: true`. Missing, null, malformed, rejected, empty, or ambiguous responses remain non-broadcastable. The Rust broadcast boundary also tests no-preflight, rejected, indeterminate, exact-finalized-transaction identity, and accepted progression states.

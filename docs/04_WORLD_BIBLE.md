@@ -129,7 +129,7 @@ The user's point of view is the human presence in the environment.
 
 Core Vault should create presence through:
 
-- camera
+- curated viewpoint
 - scale
 - sound
 - perspective
@@ -140,9 +140,9 @@ not through an avatar.
 
 ---
 
-# 6. The Camera Represents Presence
+# 6. The Curated Viewpoint Represents Presence
 
-The camera should feel approximately human in scale.
+The curated viewpoint should feel approximately human in scale and perspective. It may be produced by a real-time camera, an authored master composition with depth, or a hybrid.
 
 Objects should therefore be designed so their dimensions make intuitive sense relative to a person standing in the environment.
 
@@ -968,7 +968,7 @@ But every displayed branch must correspond to real policy semantics when used fu
 
 The facility should have a stable conceptual topology.
 
-The exact camera implementation may differ, but room relationships should remain consistent.
+The exact viewpoint and rendering implementation may differ, but room relationships should remain consistent. The environment may imply more architectural depth than is physically rendered.
 
 Canonical conceptual structure:
 

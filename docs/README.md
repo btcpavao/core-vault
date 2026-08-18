@@ -28,3 +28,7 @@ očuvati osim ako kasnija, odobrena specifikacija izričito zahtijeva promjenu.
 
 Postojeći nenumerirani dokumenti ostaju povijesna, tehnička ili prototipska dokumentacija dok
 se njihov status ne razriješi kroz odobrene specifikacije. Oni ne nadjačavaju gornju hijerarhiju.
+
+## Aktivne arhitekturne odluke
+
+- `RENDERER_DIRECTION_DECISION.md` — odobreni prijelaz s obveznih potpuno real-time 3D prostorija na renderer-neutralan sustav visokovjernih kinematičkih 2.5D scena sa selektivnim real-time elementima

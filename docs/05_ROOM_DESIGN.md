@@ -85,13 +85,15 @@ Used temporarily for precise DOM-based information and controls.
 
 The contextual interface must never permanently dominate the composition.
 
+These four zones are conceptual, not a requirement for four volumes of real-time geometry. A room may create them through one coherent cinematic master composition, foreground/mid-ground/background layers, depth information, semantic masks, controlled parallax, animation, selective geometry, and compositing. All zones must share the same perspective, light, materials, and atmosphere.
+
 ---
 
 # 4. Entry State
 
 When entering a room:
 
-1. the camera completes the spatial transition
+1. the curated viewpoint completes the spatial transition
 2. primary room ambience becomes audible
 3. the room reaches its stable default composition
 4. critical system state becomes visible
@@ -120,7 +122,7 @@ The idle room should communicate its purpose without demanding action.
 
 Selecting an important object may:
 
-- move the camera slightly closer
+- bring the viewpoint slightly closer through camera motion, crop, zoom, parallax, or depth-aware focus
 - shift light toward the object
 - reduce competing motion
 - reveal contextual controls
