@@ -1,7 +1,7 @@
 import type { EngineRoomVisualState } from "../../adapters/nodeVisualState";
 import { deriveReactorEnergyState } from "../../energy/reactorEnergyState";
 
-export type EngineRoomSceneMode = "legacy" | "production";
+export type EngineRoomSceneMode = "legacy" | "production" | "cinematic";
 export type ProductionSemanticRole =
   | "architecture"
   | "main-reactor"
@@ -77,6 +77,8 @@ export function resolveEngineRoomSceneMode({
 
   if (queryValue === "legacy") return "legacy";
   if (queryValue === "production") return "production";
+  if (queryValue === "cinematic") return "cinematic";
+  if (environmentValue === "cinematic") return "cinematic";
   return environmentValue === "1" || environmentValue === "production"
     ? "production"
     : "legacy";

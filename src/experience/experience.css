@@ -57,8 +57,165 @@
   height: 100%;
 }
 
+.experience-viewport {
+  z-index: 0;
+}
+
 .experience-viewport canvas {
   touch-action: none;
+}
+
+.experience-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.cinematic-engine-room {
+  --cinematic-depth-x: 0px;
+  --cinematic-depth-y: 0px;
+  --cinematic-transition-ms: 480ms;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #191a16;
+  isolation: isolate;
+}
+
+.cinematic-engine-room__plates {
+  position: absolute;
+  inset: -7px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.cinematic-engine-room__plate {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 50%;
+  opacity: 0;
+  transform: translate3d(var(--cinematic-depth-x), var(--cinematic-depth-y), 0)
+    scale(1.012);
+  transform-origin: 56% 48%;
+  transition:
+    opacity var(--cinematic-transition-ms) ease-out,
+    transform 560ms cubic-bezier(0.2, 0.78, 0.2, 1),
+    filter 360ms ease-out;
+  user-select: none;
+}
+
+.cinematic-engine-room__plate.is-active {
+  opacity: 1;
+}
+
+.cinematic-engine-room[data-hover="reactor"] .cinematic-engine-room__plate.is-active {
+  transform: translate3d(var(--cinematic-depth-x), var(--cinematic-depth-y), 0)
+    scale(1.018);
+}
+
+.cinematic-engine-room[data-focus="reactor"] .cinematic-engine-room__plate.is-active {
+  transform: translate3d(calc(var(--cinematic-depth-x) - 13px), var(--cinematic-depth-y), 0)
+    scale(1.047);
+}
+
+.cinematic-engine-room[data-focus="network-console"] .cinematic-engine-room__plate.is-active {
+  transform: translate3d(calc(var(--cinematic-depth-x) + 15px), var(--cinematic-depth-y), 0)
+    scale(1.035);
+  transform-origin: 29% 54%;
+}
+
+.cinematic-engine-room::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgb(17 13 8 / 22%), transparent 22%, transparent 73%, rgb(11 10 8 / 17%)),
+    linear-gradient(0deg, rgb(10 9 7 / 20%), transparent 22%);
+}
+
+.cinematic-engine-room__hit {
+  position: absolute;
+  z-index: 2;
+  padding: 0;
+  color: transparent;
+  background: transparent;
+  border: 0;
+  border-radius: 42%;
+  cursor: pointer;
+}
+
+.cinematic-engine-room__hit--reactor {
+  top: 2%;
+  left: 35%;
+  width: 34%;
+  height: 80%;
+}
+
+.cinematic-engine-room__hit--network {
+  top: 45%;
+  left: 17%;
+  width: 17%;
+  height: 23%;
+  border-radius: 18%;
+}
+
+.experience-root .cinematic-engine-room__hit:focus-visible {
+  outline: 1px solid rgb(210 178 119 / 82%);
+  outline-offset: -4px;
+  box-shadow:
+    inset 0 0 0 1px rgb(96 207 239 / 58%),
+    0 0 28px rgb(60 176 220 / 16%);
+}
+
+.experience-root[data-engine-room-scene="cinematic"] .experience-room-identity {
+  color: #f5eee2;
+  text-shadow: 0 2px 20px rgb(10 8 5 / 78%);
+}
+
+.experience-root[data-engine-room-scene="cinematic"] .experience-room-identity > p:last-child {
+  color: #ddd4c5;
+}
+
+.experience-root[data-engine-room-scene="cinematic"] .experience-room-identity .experience-kicker {
+  color: #a8d7e4;
+}
+
+.experience-root[data-engine-room-scene="cinematic"] .experience-access-control {
+  display: none;
+}
+
+.experience-root[data-engine-room-scene="cinematic"] .experience-precision-panel {
+  z-index: 20;
+  background:
+    radial-gradient(circle at 12% 0%, rgb(100 74 38 / 19%), transparent 39%),
+    linear-gradient(155deg, rgb(25 24 19 / 96%), rgb(12 14 13 / 94%));
+  box-shadow:
+    0 0 0 1px rgb(218 181 119 / 22%),
+    inset 0 1px 0 rgb(255 244 221 / 7%),
+    0 28px 72px rgb(12 8 4 / 48%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.experience-root[data-engine-room-scene="cinematic"] .experience-precision-panel::before {
+  background: linear-gradient(90deg, #b1874c, #5ed8f4 58%, transparent);
+  opacity: 0.68;
+}
+
+.experience-root[data-motion="reduced"] .cinematic-engine-room__plate,
+.experience-root[data-motion="reduced"] .cinematic-engine-room[data-focus] .cinematic-engine-room__plate {
+  transform: scale(1.012);
 }
 
 .experience-canvas-fallback {

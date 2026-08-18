@@ -15,6 +15,8 @@ const roomFiles = [
   "src/experience/rooms/EngineRoom/components/RoomArchitecture.tsx",
   "src/experience/rooms/EngineRoom/ProductionEngineRoom.tsx",
   "src/experience/rooms/EngineRoom/EngineRoomRuntime.tsx",
+  "src/experience/rooms/EngineRoom/CinematicEngineRoom.tsx",
+  "src/experience/rooms/EngineRoom/cinematicSceneContract.ts",
 ];
 
 describe("real-time experience boundary", () => {

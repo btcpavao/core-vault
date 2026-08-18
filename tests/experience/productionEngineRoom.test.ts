@@ -51,6 +51,13 @@ describe("ER-09 production scene selection", () => {
     expect(
       resolveEngineRoomSceneMode({
         development: true,
+        search: "?engineRoom=cinematic",
+        environmentValue: undefined,
+      }),
+    ).toBe("cinematic");
+    expect(
+      resolveEngineRoomSceneMode({
+        development: true,
         search: "?engineRoom=legacy",
         environmentValue: "1",
       }),

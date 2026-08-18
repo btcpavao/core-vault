@@ -8,7 +8,7 @@ export interface FrameSample {
 
 export interface EngineRoomPerformanceResult {
   scenario: string;
-  scene: "legacy" | "production";
+  scene: "legacy" | "production" | "cinematic";
   durationMs: number;
   frames: number;
   averageFps: number;
@@ -41,7 +41,7 @@ const percentile = (sortedValues: number[], ratio: number) => {
 
 export function summarizeFrameSamples(
   scenario: string,
-  scene: "legacy" | "production",
+  scene: "legacy" | "production" | "cinematic",
   samples: FrameSample[],
 ): EngineRoomPerformanceResult {
   const frameTimes = samples.map((sample) => sample.frameTimeMs).sort((a, b) => a - b);

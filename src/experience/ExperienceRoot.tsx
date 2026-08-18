@@ -30,6 +30,12 @@ import {
   type SpatialFocusTarget,
 } from "./interaction/spatialFocus";
 import { EngineRoomPerformanceSampler } from "./rooms/EngineRoom/EngineRoomPerformanceSampler";
+import { CinematicEngineRoom } from "./rooms/EngineRoom/CinematicEngineRoom";
+import { CinematicEngineRoomPerformanceSampler } from "./rooms/EngineRoom/CinematicEngineRoomPerformanceSampler";
+import {
+  applyCinematicReviewState,
+  resolveCinematicReviewState,
+} from "./rooms/EngineRoom/cinematicSceneContract";
 import {
   EngineRoomResourceProbe,
   type EngineRoomResourceSnapshot,
@@ -178,6 +184,7 @@ const ER12A_CAPTURE_JOBS: Array<{
 ];
 
 const ER10B_QA_ENABLED = import.meta.env.VITE_CV_ER10B_QA === "1";
+const CINEMATIC_QA_ENABLED = import.meta.env.VITE_CV_CINEMATIC_QA === "1";
 const ER11B_AUTORUN_ENABLED = import.meta.env.VITE_CV_ER11B_AUTORUN === "1";
 const ER12A_QA_VIEW = productionReviewViewFromSearch(
   true,
@@ -257,7 +264,7 @@ export default function ExperienceRoot() {
   const nodeRead = useNodeStatus();
   const visible = useDocumentVisibility();
   const reducedMotion = useReducedMotion();
-  const visualState = useMemo(
+  const authoritativeVisualState = useMemo(
     () => adaptNodeStatusToEngineRoom(nodeRead.status),
     [nodeRead.status],
   );
@@ -306,6 +313,22 @@ export default function ExperienceRoot() {
   const activeSceneMode = ER10B_QA_ENABLED
     ? er11SceneOverride ?? sceneMode
     : sceneMode;
+  const cinematicReviewState = useMemo(
+    () =>
+      resolveCinematicReviewState(
+        import.meta.env.DEV || CINEMATIC_QA_ENABLED,
+        window.location.search,
+        import.meta.env.VITE_CV_CINEMATIC_REVIEW_STATE,
+      ),
+    [],
+  );
+  const visualState = useMemo(
+    () =>
+      activeSceneMode === "cinematic"
+        ? applyCinematicReviewState(authoritativeVisualState, cinematicReviewState)
+        : authoritativeVisualState,
+    [activeSceneMode, authoritativeVisualState, cinematicReviewState],
+  );
   const reviewView = useMemo(
     () => {
       const searchView = productionReviewViewFromSearch(
@@ -323,7 +346,7 @@ export default function ExperienceRoot() {
   );
   const er10PerformanceScenario = import.meta.env.VITE_CV_ER10_PERF_SCENARIO;
   const nonQaPerformanceEnabled =
-    import.meta.env.DEV &&
+    (import.meta.env.DEV || CINEMATIC_QA_ENABLED) &&
     (new URLSearchParams(window.location.search).get("er09Perf") === "1" ||
       Boolean(er10PerformanceScenario));
   const performanceEnabled = ER10B_QA_ENABLED || nonQaPerformanceEnabled;
@@ -389,7 +412,7 @@ export default function ExperienceRoot() {
   }, []);
 
   useEffect(() => {
-    if (!import.meta.env.DEV && !ER10B_QA_ENABLED) return;
+    if (!import.meta.env.DEV && !ER10B_QA_ENABLED && !CINEMATIC_QA_ENABLED) return;
     const onAsset = (event: Event) =>
       setEr09AssetMetrics((event as CustomEvent<Er09AssetMetrics>).detail);
     const onPerformance = (event: Event) => {
@@ -418,7 +441,7 @@ export default function ExperienceRoot() {
           }
         }
       }
-      if (er10PerformanceScenario) {
+      if (er10PerformanceScenario && import.meta.env.DEV) {
         void postEr10Performance(er10PerformanceScenario, result).catch((error) => {
           console.error("[ER-10 performance export]", error);
         });
@@ -500,8 +523,8 @@ export default function ExperienceRoot() {
   ]);
 
   useEffect(() => {
-    observeBlockHeight(visualState.blockHeight);
-  }, [visualState.blockHeight]);
+    observeBlockHeight(authoritativeVisualState.blockHeight);
+  }, [authoritativeVisualState.blockHeight]);
 
   const focusTarget = useCallback((target: Exclude<SpatialFocusTarget, "overview">) => {
     dispatchFocus({ type: "focus", target });
@@ -578,11 +601,17 @@ export default function ExperienceRoot() {
     window.requestAnimationFrame(() => {
       document
         .getElementById(
-          returnTarget === "network-console" ? "focus-network-console" : "focus-reactor",
+          activeSceneMode === "cinematic"
+            ? returnTarget === "network-console"
+              ? "cinematic-network-console-control"
+              : "cinematic-reactor-control"
+            : returnTarget === "network-console"
+              ? "focus-network-console"
+              : "focus-reactor",
         )
         ?.focus({ preventScroll: true });
     });
-  }, [focus]);
+  }, [activeSceneMode, focus]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -599,8 +628,10 @@ export default function ExperienceRoot() {
     ? "Reading the local node"
     : connectionLabel(visualState.connection);
   const selectedContext = focus === "network-console" ? "network" : "reactor";
+  const cinematicActive = activeSceneMode === "cinematic" && !productionFallback;
+  const canvasSceneMode = activeSceneMode === "cinematic" ? "legacy" : activeSceneMode;
   const initialCamera =
-    activeSceneMode === "production"
+    canvasSceneMode === "production"
       ? ER09_PRODUCTION_CAMERA_POSES[effectiveReviewView ?? "hero"]
       : ENGINE_ROOM_CAMERA_POSES.overview;
 
@@ -608,9 +639,19 @@ export default function ExperienceRoot() {
     <main
       className="experience-root"
       data-motion={effectiveReducedMotion ? "reduced" : "full"}
-      data-engine-room-scene={productionFallback ? "legacy-fallback" : activeSceneMode}
+      data-engine-room-scene={
+        productionFallback
+          ? activeSceneMode === "cinematic"
+            ? "cinematic-fallback"
+            : "legacy-fallback"
+          : activeSceneMode
+      }
+      data-cinematic-review-state={cinematicReviewState ?? undefined}
     >
-      <a className="experience-skip-link" href="#engine-room-access">
+      <a
+        className="experience-skip-link"
+        href={cinematicActive ? "#cinematic-reactor-control" : "#engine-room-access"}
+      >
         Skip real-time room
       </a>
 
@@ -620,7 +661,7 @@ export default function ExperienceRoot() {
             <p className="experience-kicker">Presentation unavailable</p>
             <h1>Real-time environment could not start.</h1>
             <p>
-              This is a WebGL presentation failure. It does not mean Bitcoin Core failed, and no
+              This is a presentation-layer failure. It does not mean Bitcoin Core failed, and no
               wallet or node state was changed.
             </p>
             {import.meta.env.DEV && (
@@ -628,11 +669,29 @@ export default function ExperienceRoot() {
             )}
             <a href="/">Return to the existing Core Vault interface</a>
           </div>
+        ) : cinematicActive ? (
+          <>
+            <CinematicEngineRoom
+              visualState={visualState}
+              validationPulseSerial={blockPulse.pulseSerial}
+              focus={focus}
+              reducedMotion={effectiveReducedMotion}
+              reviewState={cinematicReviewState}
+              onFocus={focusTarget}
+              onClearFocus={clearFocus}
+              onPresentationFailure={setProductionFallback}
+            />
+            <CinematicEngineRoomPerformanceSampler
+              key={`cinematic-${performanceScenario}`}
+              enabled={performanceEnabled}
+              scenario={performanceScenario}
+            />
+          </>
         ) : (
           <PresentationBoundary onFailure={setPresentationFailure}>
             <Canvas
               shadows
-              dpr={activeSceneMode === "production" ? 1 : [1, 1.5]}
+              dpr={canvasSceneMode === "production" ? 1 : [1, 1.5]}
               frameloop={performanceEnabled || visible ? "always" : "never"}
               camera={{
                 position: [...initialCamera.position],
@@ -655,7 +714,7 @@ export default function ExperienceRoot() {
               onCreated={({ gl }) => {
                 gl.outputColorSpace = SRGBColorSpace;
                 gl.toneMapping = ACESFilmicToneMapping;
-                gl.toneMappingExposure = activeSceneMode === "production" ? 0.9 : 1;
+                gl.toneMappingExposure = canvasSceneMode === "production" ? 0.9 : 1;
                 captureCanvasRef.current = gl.domElement;
                 const canvas = gl.domElement;
                 const onContextLost = (event: Event) => {
@@ -665,12 +724,12 @@ export default function ExperienceRoot() {
                 canvas.addEventListener("webglcontextlost", onContextLost, { once: true });
               }}
             >
-              {activeSceneMode === "production" && !productionFallback && (
+              {canvasSceneMode === "production" && !productionFallback && (
                 <ProductionStaticEnvironment />
               )}
               {er11RoomMounted && (
                 <EngineRoomRuntime
-                  mode={activeSceneMode}
+                  mode={canvasSceneMode}
                   visualState={visualState}
                   validationPulseSerial={blockPulse.pulseSerial}
                   focus={focus}
@@ -684,7 +743,7 @@ export default function ExperienceRoot() {
               <EngineRoomPerformanceSampler
                 key={`er10b-${er10bQaRun}-${performanceScenario}`}
                 enabled={performanceEnabled}
-                scene={productionFallback ? "legacy" : activeSceneMode}
+                scene={productionFallback ? "legacy" : canvasSceneMode}
                 scenario={performanceScenario}
               />
               <EngineRoomResourceProbe
@@ -716,7 +775,7 @@ export default function ExperienceRoot() {
             </div>
           )}
 
-          {import.meta.env.DEV && (
+          {(import.meta.env.DEV || CINEMATIC_QA_ENABLED) && (
             <output
               id="er09-runtime-metrics"
               hidden
@@ -725,7 +784,7 @@ export default function ExperienceRoot() {
             />
           )}
 
-          {import.meta.env.DEV && er10PerformanceScenario && (
+          {(import.meta.env.DEV || CINEMATIC_QA_ENABLED) && er10PerformanceScenario && (
             <output
               id="er10-runtime-performance-result"
               style={{ position: "fixed", left: 0, top: 0, zIndex: 9999, fontSize: "1px" }}

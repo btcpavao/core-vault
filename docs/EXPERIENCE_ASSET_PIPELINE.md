@@ -96,6 +96,24 @@ node art-source/engine-room/export-cooling-manifold.mjs
 
 The asset is passive presentation. Its inner material is intentionally dark and subdued; live blue node meaning continues to come only from `NodeStatus -> EngineRoomVisualState -> R3F` in code.
 
+## Engine Room cinematic 2.5D proof package
+
+The first renderer-pivot proof uses five fully registered, composition-matched WebP state plates rather than a generic room format. The canonical Ready plate carries the architecture, perspective, material response, shadows, reflected light, atmosphere, Reactor, console, secondary chamber, and exterior. The four companion plates change only physical scene state: Offline, Syncing, Network disabled, and New block. No SVG energy, CSS machinery, remote texture, or runtime image-generation call is used.
+
+All plates are 1672 × 941, lossy WebP quality 92, and share a single crop. They are declared in `src/experience/assets/assetManifest.ts` and live in `public/assets/experience/engine-room/cinematic/`. Total encoded size is 1,830,294 bytes (1.75 MiB). One decoded RGBA plate is approximately 6,293,408 bytes (6.00 MiB); five preloaded plates are approximately 30.0 MiB before browser-internal overhead.
+
+Provenance for every plate:
+
+- source: the approved project-owned Engine Room reference at `docs/references/engine-room/engine-room-hero-reference.png`;
+- creator/tool: human-directed OpenAI image editing through Codex on 2026-08-18;
+- licence: Core Vault original, project-owned derivative of supplied project-owned reference material;
+- project-original: yes;
+- generated from supplied project-owned reference material: yes;
+- runtime use: local committed presentation asset only, with no network fetch;
+- audit record: `art-source/blender/engine-room/review/cinematic-2_5d/CINEMATIC-2_5D-MANIFEST.md`.
+
+Runtime selection is explicit: `legacy`, `production`, or `cinematic`. The cinematic compositor still receives the existing `EngineRoomVisualState`; the real block-height reducer remains the only production trigger for the short gold state. Reactor and console hit regions are semantic DOM buttons registered to the visible composition. The existing contextual NodeStatus panel remains DOM and is not rasterized.
+
 ## Review checklist for future scene packages and assets
 
 1. Confirm purpose, master composition, viewpoint, semantic objects, and exact room placement before import.
