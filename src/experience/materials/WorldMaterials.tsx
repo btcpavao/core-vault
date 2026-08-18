@@ -11,22 +11,22 @@ import { WORLD_TEXTURES } from "./proceduralTextures";
 
 export const WORLD_MATERIALS = {
   limestone: {
-    pale: "#f1eadb",
-    base: "#ddd0b8",
-    shadow: "#b5a891",
-    inset: "#8b8171",
+    pale: "#eadfcd",
+    base: "#d8c7ae",
+    shadow: "#b6a288",
+    inset: "#918371",
   },
   bronze: {
-    structural: "#c38d50",
-    precision: "#dfad69",
-    dark: "#665140",
+    structural: "#9f6534",
+    precision: "#c98a45",
+    dark: "#3b342e",
   },
-  technicalGlass: "#d8f0ee",
+  technicalGlass: "#e0f3f1",
   energy: {
-    active: "#3da8ce",
-    highlight: "#c7edf3",
-    dormant: "#2b3e45",
-    offline: "#1b272c",
+    active: "#35bdf2",
+    highlight: "#d2f5ff",
+    dormant: "#31464d",
+    offline: "#1e2d32",
   },
 } as const;
 
@@ -34,13 +34,13 @@ type LimestoneTone = keyof typeof WORLD_MATERIALS.limestone;
 type BronzeFinish = keyof typeof WORLD_MATERIALS.bronze;
 export type LimestoneSurface = "architectural" | "hero" | "floor";
 
-const STONE_NORMAL_SCALE = new Vector2(0.11, 0.11);
-const HERO_STONE_NORMAL_SCALE = new Vector2(0.18, 0.18);
-const FLOOR_NORMAL_SCALE = new Vector2(0.14, 0.14);
+const STONE_NORMAL_SCALE = new Vector2(0.15, 0.15);
+const HERO_STONE_NORMAL_SCALE = new Vector2(0.22, 0.22);
+const FLOOR_NORMAL_SCALE = new Vector2(0.18, 0.18);
 const BRONZE_NORMAL_SCALE = {
-  structural: new Vector2(0.13, 0.06),
-  precision: new Vector2(0.1, 0.045),
-  dark: new Vector2(0.085, 0.05),
+  structural: new Vector2(0.16, 0.07),
+  precision: new Vector2(0.12, 0.05),
+  dark: new Vector2(0.1, 0.055),
 } as const;
 
 export function LimestoneMaterial({
@@ -58,7 +58,7 @@ export function LimestoneMaterial({
         : WORLD_TEXTURES.limestone;
 
   return (
-    <meshStandardMaterial
+    <meshPhysicalMaterial
       color={WORLD_MATERIALS.limestone[tone]}
       map={textures.baseColor}
       roughnessMap={textures.roughness}
@@ -71,24 +71,38 @@ export function LimestoneMaterial({
             : STONE_NORMAL_SCALE
       }
       metalness={0.01}
-      roughness={tone === "pale" ? 0.82 : tone === "inset" ? 0.94 : 0.88}
-      envMapIntensity={surface === "architectural" ? 0.7 : 0.88}
+      roughness={
+        surface === "floor"
+          ? 0.63
+          : tone === "pale"
+            ? 0.74
+            : tone === "inset"
+              ? 0.89
+              : 0.79
+      }
+      envMapIntensity={surface === "architectural" ? 0.78 : surface === "floor" ? 1.04 : 0.94}
+      clearcoat={surface === "floor" ? 0.16 : surface === "hero" ? 0.1 : 0.04}
+      clearcoatRoughness={surface === "floor" ? 0.48 : 0.64}
     />
   );
 }
 
 export function BronzeMaterial({ finish = "structural" }: { finish?: BronzeFinish }) {
   return (
-    <meshStandardMaterial
+    <meshPhysicalMaterial
       color={WORLD_MATERIALS.bronze[finish]}
       map={WORLD_TEXTURES.bronze.baseColor}
       roughnessMap={WORLD_TEXTURES.bronze.roughness}
       normalMap={WORLD_TEXTURES.bronze.normal}
       normalScale={BRONZE_NORMAL_SCALE[finish]}
       metalnessMap={WORLD_TEXTURES.bronze.metalness}
-      metalness={finish === "dark" ? 0.78 : finish === "precision" ? 0.93 : 0.88}
-      roughness={finish === "precision" ? 0.29 : finish === "dark" ? 0.62 : 0.4}
-      envMapIntensity={finish === "precision" ? 1.82 : 1.48}
+      metalness={finish === "dark" ? 0.82 : finish === "precision" ? 0.96 : 0.92}
+      roughness={finish === "precision" ? 0.28 : finish === "dark" ? 0.56 : 0.38}
+      envMapIntensity={finish === "precision" ? 1.92 : finish === "dark" ? 1.18 : 1.58}
+      anisotropy={finish === "dark" ? 0.22 : finish === "precision" ? 0.62 : 0.48}
+      anisotropyRotation={Math.PI / 2}
+      clearcoat={finish === "precision" ? 0.18 : 0.07}
+      clearcoatRoughness={0.2}
     />
   );
 }
@@ -99,18 +113,18 @@ export function TechnicalGlassMaterial({ opacity = 0.27 }: { opacity?: number })
       color={WORLD_MATERIALS.technicalGlass}
       roughnessMap={WORLD_TEXTURES.glassRoughness}
       transparent
-      opacity={opacity}
-      transmission={0.88}
-      thickness={0.68}
+      opacity={Math.max(opacity, 0.31)}
+      transmission={0.94}
+      thickness={0.5}
       ior={1.49}
-      roughness={0.17}
+      roughness={0.085}
       metalness={0.01}
       specularIntensity={1}
-      envMapIntensity={1.48}
+      envMapIntensity={2.15}
       clearcoat={1}
-      clearcoatRoughness={0.08}
-      attenuationColor="#d4edeb"
-      attenuationDistance={2.2}
+      clearcoatRoughness={0.045}
+      attenuationColor="#cde9e8"
+      attenuationDistance={3.2}
       depthWrite={false}
       side={DoubleSide}
     />
@@ -118,54 +132,67 @@ export function TechnicalGlassMaterial({ opacity = 0.27 }: { opacity?: number })
 }
 
 export function clonePolishedAuthoredMaterial(source: Material) {
-  const material = source.clone();
-  if (!(material instanceof MeshStandardMaterial)) return material;
+  let material: Material;
 
-  if (material.name.includes("Limestone")) {
-    const hero = material.name.includes("Hero");
+  if (source.name.includes("Limestone")) {
+    const hero = source.name.includes("Hero");
     const textures = hero ? WORLD_TEXTURES.limestoneHero : WORLD_TEXTURES.limestone;
-    material.color.set(WORLD_MATERIALS.limestone.base);
-    material.map = textures.baseColor;
-    material.roughnessMap = textures.roughness;
-    material.normalMap = textures.normal;
-    material.normalScale.copy(hero ? HERO_STONE_NORMAL_SCALE : STONE_NORMAL_SCALE);
-    material.metalness = 0.01;
-    material.roughness = 0.88;
-    material.envMapIntensity = hero ? 0.88 : 0.7;
-  } else if (material.name.includes("Bronze") || material.name.includes("Dark_Metal")) {
-    const precision = material.name.includes("Precision");
-    const dark = material.name.includes("Dark_Metal");
+    material = new MeshPhysicalMaterial({
+      name: source.name,
+      color: WORLD_MATERIALS.limestone.base,
+      map: textures.baseColor,
+      roughnessMap: textures.roughness,
+      normalMap: textures.normal,
+      normalScale: hero ? HERO_STONE_NORMAL_SCALE : STONE_NORMAL_SCALE,
+      metalness: 0.01,
+      roughness: hero ? 0.75 : 0.81,
+      envMapIntensity: hero ? 0.98 : 0.78,
+      clearcoat: hero ? 0.11 : 0.04,
+      clearcoatRoughness: 0.58,
+    });
+  } else if (source.name.includes("Bronze") || source.name.includes("Dark_Metal")) {
+    const precision = source.name.includes("Precision");
+    const dark = source.name.includes("Dark_Metal");
     const finish: BronzeFinish = precision ? "precision" : dark ? "dark" : "structural";
-    material.color.set(WORLD_MATERIALS.bronze[finish]);
-    material.map = WORLD_TEXTURES.bronze.baseColor;
-    material.roughnessMap = WORLD_TEXTURES.bronze.roughness;
-    material.normalMap = WORLD_TEXTURES.bronze.normal;
-    material.normalScale.copy(BRONZE_NORMAL_SCALE[finish]);
-    material.metalnessMap = WORLD_TEXTURES.bronze.metalness;
-    material.metalness = finish === "dark" ? 0.78 : finish === "precision" ? 0.93 : 0.88;
-    material.roughness = finish === "precision" ? 0.29 : finish === "dark" ? 0.62 : 0.4;
-    material.envMapIntensity = finish === "precision" ? 1.82 : 1.48;
-  } else if (material.name.includes("Technical_Glass")) {
-    material.color.set(WORLD_MATERIALS.technicalGlass);
-    material.roughnessMap = WORLD_TEXTURES.glassRoughness;
-    material.metalness = 0.01;
-    material.roughness = 0.17;
-    material.transparent = true;
-    material.opacity = 0.27;
-    material.depthWrite = false;
-    material.side = DoubleSide;
-
-    if (material instanceof MeshPhysicalMaterial) {
-      material.transmission = 0.88;
-      material.thickness = 0.68;
-      material.ior = 1.49;
-      material.specularIntensity = 1;
-      material.envMapIntensity = 1.48;
-      material.clearcoat = 1;
-      material.clearcoatRoughness = 0.08;
-      material.attenuationColor.set("#d4edeb");
-      material.attenuationDistance = 2.2;
-    }
+    material = new MeshPhysicalMaterial({
+      name: source.name,
+      color: WORLD_MATERIALS.bronze[finish],
+      map: WORLD_TEXTURES.bronze.baseColor,
+      roughnessMap: WORLD_TEXTURES.bronze.roughness,
+      normalMap: WORLD_TEXTURES.bronze.normal,
+      normalScale: BRONZE_NORMAL_SCALE[finish],
+      metalnessMap: WORLD_TEXTURES.bronze.metalness,
+      metalness: dark ? 0.82 : precision ? 0.96 : 0.92,
+      roughness: precision ? 0.28 : dark ? 0.56 : 0.38,
+      envMapIntensity: precision ? 1.92 : dark ? 1.18 : 1.58,
+      anisotropy: dark ? 0.22 : precision ? 0.62 : 0.48,
+      anisotropyRotation: Math.PI / 2,
+      clearcoat: precision ? 0.18 : 0.07,
+      clearcoatRoughness: 0.2,
+    });
+  } else if (source.name.includes("Technical_Glass")) {
+    material = new MeshPhysicalMaterial({
+      name: source.name,
+      color: WORLD_MATERIALS.technicalGlass,
+      roughnessMap: WORLD_TEXTURES.glassRoughness,
+      metalness: 0.01,
+      roughness: 0.085,
+      transparent: true,
+      opacity: 0.34,
+      transmission: 0.94,
+      thickness: 0.5,
+      ior: 1.49,
+      specularIntensity: 1,
+      envMapIntensity: 2.15,
+      clearcoat: 1,
+      clearcoatRoughness: 0.045,
+      attenuationColor: "#cde9e8",
+      attenuationDistance: 3.2,
+      depthWrite: false,
+      side: DoubleSide,
+    });
+  } else {
+    material = source.clone();
   }
 
   material.needsUpdate = true;

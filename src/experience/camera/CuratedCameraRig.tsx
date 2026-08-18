@@ -2,19 +2,36 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { MathUtils, PerspectiveCamera, Vector3 } from "three";
 import type { SpatialFocusTarget } from "../interaction/spatialFocus";
-import { cameraPoseForFocus, cameraTransitionPolicy } from "./engineRoomCamera";
+import {
+  cameraPoseForFocus,
+  cameraTransitionPolicy,
+  ER09_PRODUCTION_CAMERA_POSES,
+  productionCameraPoseForFocus,
+  type EngineRoomReviewView,
+} from "./engineRoomCamera";
 
 interface CuratedCameraRigProps {
   focus: SpatialFocusTarget;
   reducedMotion: boolean;
+  reviewView?: EngineRoomReviewView | null;
+  production?: boolean;
 }
 
-export function CuratedCameraRig({ focus, reducedMotion }: CuratedCameraRigProps) {
+export function CuratedCameraRig({
+  focus,
+  reducedMotion,
+  reviewView = null,
+  production = false,
+}: CuratedCameraRigProps) {
   const { camera } = useThree();
-  const pose = cameraPoseForFocus(focus);
+  const pose = reviewView
+    ? ER09_PRODUCTION_CAMERA_POSES[reviewView]
+    : production
+      ? productionCameraPoseForFocus(focus)
+      : cameraPoseForFocus(focus);
   const destination = useMemo(() => new Vector3(), []);
   const targetDestination = useMemo(() => new Vector3(), []);
-  const currentTarget = useRef(new Vector3(...cameraPoseForFocus("overview").target));
+  const currentTarget = useRef(new Vector3(...pose.target));
 
   destination.fromArray(pose.position);
   targetDestination.fromArray(pose.target);

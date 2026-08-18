@@ -1,0 +1,26 @@
+{
+  "package": {
+    "productName": "Core Vault ER11 QA"
+  },
+  "tauri": {
+    "bundle": {
+      "active": true,
+      "identifier": "com.corevault.er11.qa",
+      "targets": ["app"]
+    },
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; frame-src 'none'"
+    },
+    "windows": [
+      {
+        "title": "Core Vault ER11 QA",
+        "width": 1240,
+        "height": 820,
+        "minWidth": 960,
+        "minHeight": 680,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  }
+}

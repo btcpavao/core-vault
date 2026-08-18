@@ -1,10 +1,12 @@
 import { Component, Suspense, useMemo, type ErrorInfo, type ReactNode } from "react";
 import { useGLTF } from "@react-three/drei";
 import type { Group, Material, Mesh } from "three";
+import type { EngineRoomConnection } from "../../../adapters/nodeVisualState";
 import { ENGINE_ROOM_ASSETS } from "../../../assets/assetManifest";
 import {
   BronzeMaterial,
   clonePolishedAuthoredMaterial,
+  EnergyMaterial,
   LimestoneMaterial,
   TechnicalGlassMaterial,
 } from "../../../materials/WorldMaterials";
@@ -86,6 +88,36 @@ export function CoolingManifold() {
           <CoolingManifoldModel />
         </Suspense>
       </LocalAssetBoundary>
+    </group>
+  );
+}
+
+export function CoolingManifoldEnergy({
+  connection,
+  active,
+}: {
+  connection: EngineRoomConnection;
+  active: boolean;
+}) {
+  return (
+    <group position={[3.65, 0, -2.28]} rotation={[0, -0.28, 0]} name="cooling-manifold-energy">
+      <mesh position={[0, 1.42, 0]}>
+        <cylinderGeometry args={[0.12, 0.12, 1.78, 24]} />
+        <EnergyMaterial connection={connection} active={active} intensity={0.72} />
+      </mesh>
+      {[0.78, 1.42, 2.06].map((height) => (
+        <mesh key={height} position={[0, height, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.34, 0.018, 6, 40]} />
+          <EnergyMaterial connection={connection} active={active} intensity={0.48} />
+        </mesh>
+      ))}
+      <pointLight
+        position={[0, 1.42, 0]}
+        color="#43bce9"
+        intensity={active ? 2.2 : 0.08}
+        distance={2.8}
+        decay={2}
+      />
     </group>
   );
 }

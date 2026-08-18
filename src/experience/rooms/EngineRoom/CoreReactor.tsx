@@ -31,7 +31,7 @@ export function CoreReactor({
 
   useFrame((_, delta) => {
     if (!reducedMotion && networkAssemblyRef.current && networkActive) {
-      networkAssemblyRef.current.rotation.z -= delta * 0.09;
+      networkAssemblyRef.current.rotation.y -= delta * 0.07;
     }
   });
 
@@ -43,20 +43,30 @@ export function CoreReactor({
         pulseSerial={validationPulseSerial}
         reducedMotion={reducedMotion}
       />
-      <group ref={networkAssemblyRef} position={[0, 2.12, 0]}>
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[1.46, 0.032, 10, 64]} />
-          <EnergyMaterial connection={visualState.connection} active={networkActive} intensity={0.76} />
-        </mesh>
-        <mesh rotation={[0, 0, Math.PI / 2]}>
-          <torusGeometry args={[1.46, 0.032, 10, 64]} />
-          <EnergyMaterial connection={visualState.connection} active={networkActive} intensity={0.58} />
-        </mesh>
+      <group ref={networkAssemblyRef} position={[0, 2.12, 0]} name="network-segment-assembly">
+        {[-0.9, 0.9].map((height) =>
+          Array.from({ length: 4 }, (_, index) => (
+            <group key={`${height}-${index}`} position={[0, height, 0]} rotation={[0, index * Math.PI * 0.5, 0]}>
+              <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <torusGeometry args={[1.38, 0.025, 8, 28, Math.PI * 0.3]} />
+                <EnergyMaterial
+                  connection={visualState.connection}
+                  active={networkActive}
+                  intensity={height < 0 ? 0.5 : 0.38}
+                />
+              </mesh>
+            </group>
+          )),
+        )}
       </group>
       {(focused || hovered) && (
         <mesh position={[0, 0.045, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[2.26, 2.33, 64]} />
-          <EnergyMaterial connection="online" active intensity={focused ? 0.72 : 0.32} />
+          <EnergyMaterial
+            connection={visualState.connection}
+            active={online}
+            intensity={focused ? 0.62 : 0.28}
+          />
         </mesh>
       )}
       <SpatialHitTarget

@@ -5,7 +5,7 @@ import { CuratedCameraRig } from "../../camera/CuratedCameraRig";
 import type { SpatialFocusTarget } from "../../interaction/spatialFocus";
 import { WORLD_MATERIALS } from "../../materials/WorldMaterials";
 import { CoreReactor } from "./CoreReactor";
-import { CoolingManifold } from "./components/CoolingManifold";
+import { CoolingManifold, CoolingManifoldEnergy } from "./components/CoolingManifold";
 import { EnergyConduit } from "./components/EnergyConduit";
 import { NetworkConsole } from "./components/NetworkConsole";
 import { RoomArchitecture } from "./components/RoomArchitecture";
@@ -58,27 +58,43 @@ function MaterialEnvironment() {
     <Environment background={false} frames={1} resolution={256}>
       <Lightformer
         form="rect"
-        color="#fff1d2"
-        intensity={2.2}
-        position={[4, 5, 5]}
-        rotation={[0, -0.65, 0]}
-        scale={[7, 4, 1]}
+        color="#fff0ca"
+        intensity={2.45}
+        position={[-5.5, 4.7, 2.8]}
+        rotation={[0, 0.82, 0]}
+        scale={[8, 5.5, 1]}
       />
       <Lightformer
         form="rect"
-        color="#c9e7ef"
-        intensity={1.18}
-        position={[-4, 2.5, 4]}
-        rotation={[0, 0.7, 0]}
-        scale={[4, 5, 1]}
+        color="#d8f1f3"
+        intensity={1.2}
+        position={[-4.8, 2.7, -2.5]}
+        rotation={[0, 0.88, 0]}
+        scale={[4.5, 5.5, 1]}
       />
       <Lightformer
         form="ring"
-        color="#fff4df"
-        intensity={0.82}
-        position={[0, 6, -4]}
+        color="#fff7e8"
+        intensity={0.88}
+        position={[0, 6.2, -2.8]}
         rotation={[Math.PI / 2, 0, 0]}
-        scale={[2.5, 2.5, 1]}
+        scale={[3.2, 3.2, 1]}
+      />
+      <Lightformer
+        form="rect"
+        color="#ffcf91"
+        intensity={1.45}
+        position={[5.3, 3.4, -3.8]}
+        rotation={[0, -1.05, 0]}
+        scale={[3.5, 4.8, 1]}
+      />
+      <Lightformer
+        form="rect"
+        color="#d5f5ff"
+        intensity={0.86}
+        position={[0, 2.4, 3.7]}
+        rotation={[0, Math.PI, 0]}
+        scale={[2.1, 4.8, 1]}
       />
     </Environment>
   );
@@ -94,12 +110,12 @@ function RoomLighting({ visualState }: { visualState: EngineRoomVisualState }) {
 
   return (
     <>
-      <ambientLight intensity={0.46} color="#e9e1d3" />
-      <hemisphereLight args={["#e7f4f3", "#8d7a61", 1.42]} />
+      <ambientLight intensity={0.44} color="#f2e8d8" />
+      <hemisphereLight args={["#e8f7f7", "#917b60", 1.2]} />
       <directionalLight
-        position={[8.5, 12, 10]}
+        position={[-8.5, 12, 8.5]}
         intensity={1.9}
-        color="#ffe0ad"
+        color="#ffe2ad"
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
@@ -111,24 +127,24 @@ function RoomLighting({ visualState }: { visualState: EngineRoomVisualState }) {
         shadow-camera-bottom={-8}
         shadow-bias={-0.0002}
         shadow-normalBias={0.025}
-        shadow-radius={10}
+        shadow-radius={12}
       />
       <spotLight
-        position={[-5, 6, 3.5]}
-        target-position={[-2.5, 0, -2]}
-        intensity={11}
-        distance={18}
-        angle={0.5}
-        penumbra={0.85}
-        color="#b6d5d7"
+        position={[-6.5, 6.8, 3.8]}
+        target-position={[-1.2, 0.8, -1.5]}
+        intensity={8.5}
+        distance={22}
+        angle={0.56}
+        penumbra={0.92}
+        color="#d7edef"
       />
       <rectAreaLight
-        position={[-5.4, 3.5, 1.9]}
+        position={[-5.5, 3.6, 1.8]}
         rotation={[0, Math.PI / 2.6, 0]}
-        width={5.8}
-        height={4.4}
-        color="#cfedf0"
-        intensity={3.2}
+        width={6.8}
+        height={5.2}
+        color="#e0f2f1"
+        intensity={2.75}
       />
       <rectAreaLight
         position={[4.8, 3.2, 2.5]}
@@ -136,7 +152,7 @@ function RoomLighting({ visualState }: { visualState: EngineRoomVisualState }) {
         width={5.2}
         height={3.8}
         color="#ffe1b2"
-        intensity={2.8}
+        intensity={2.55}
       />
       <pointLight
         position={[0, 2.15, -0.72]}
@@ -145,7 +161,7 @@ function RoomLighting({ visualState }: { visualState: EngineRoomVisualState }) {
         distance={7}
         decay={2}
       />
-      <pointLight position={[4.65, 4.2, -5]} color="#efbe7d" intensity={4.4} distance={7} decay={2} />
+      <pointLight position={[4.65, 4.2, -5]} color="#efbe7d" intensity={3.2} distance={7} decay={2} />
     </>
   );
 }
@@ -163,8 +179,8 @@ function EngineRoomComponent({
 
   return (
     <>
-      <color attach="background" args={["#9ebfc8"]} />
-      <fog attach="fog" args={["#b5c9c8", 18, 37]} />
+      <color attach="background" args={["#b8d4d9"]} />
+      <fog attach="fog" args={["#c4d4d0", 24, 52]} />
       <CuratedCameraRig focus={focus} reducedMotion={reducedMotion} />
       <MaterialEnvironment />
       <RoomLighting visualState={visualState} />
@@ -173,17 +189,24 @@ function EngineRoomComponent({
         points={CONSOLE_ROUTE}
         connection={visualState.connection}
         active={networkEnabled}
+        reducedMotion={reducedMotion}
       />
       <EnergyConduit
         points={MANIFOLD_ROUTE}
         connection={visualState.connection}
         active={networkEnabled}
+        reducedMotion={reducedMotion}
       />
       <EnergyConduit
         points={BACKPLANE_ROUTE}
         connection={visualState.connection}
         active={visualState.connection === "online"}
         radius={0.035}
+        reducedMotion={reducedMotion}
+      />
+      <CoolingManifoldEnergy
+        connection={visualState.connection}
+        active={visualState.connection === "online"}
       />
       <NetworkConsole
         visualState={visualState}

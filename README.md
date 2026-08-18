@@ -12,6 +12,12 @@ Autoritativne specifikacije projekta nalaze se u direktoriju [docs/](docs/README
 drugi suradnici moraju ih pročitati prije svakog značajnog produktnog ili sučeljnog rada te
 izričito prijaviti svaki nesklad između specifikacije i postojeće implementacije.
 
+## 3D Environment Production
+
+Production-quality Core Vault 3D environments must follow the
+[Art Production Pipeline](docs/ART_PRODUCTION_PIPELINE.md). Room-specific approved visual
+references live under [docs/references/](docs/references/).
+
 ## Što radi
 
 - otkriva lokalni Bitcoin Core preko standardnog cookieja i loopback RPC-a

@@ -13,6 +13,8 @@ const roomFiles = [
   "src/experience/rooms/EngineRoom/components/AuthoredCoreReactor.tsx",
   "src/experience/rooms/EngineRoom/components/ReactorEnergyField.tsx",
   "src/experience/rooms/EngineRoom/components/RoomArchitecture.tsx",
+  "src/experience/rooms/EngineRoom/ProductionEngineRoom.tsx",
+  "src/experience/rooms/EngineRoom/EngineRoomRuntime.tsx",
 ];
 
 describe("real-time experience boundary", () => {
@@ -49,6 +51,17 @@ describe("real-time experience boundary", () => {
     expect(roomSource).toContain("<StaticRoomLayer onClearFocus={onClearFocus}");
     expect(architectureSource).toContain("export const RoomArchitecture = memo");
     expect(architectureSource).not.toContain("EngineRoomVisualState");
+  });
+
+  it("builds the Mediterranean depth cue as real scene geometry", () => {
+    const architectureSource = source(
+      "src/experience/rooms/EngineRoom/components/RoomArchitecture.tsx",
+    );
+
+    expect(architectureSource).toContain("MediterraneanExterior");
+    expect(architectureSource).toContain('name="mediterranean-exterior"');
+    expect(architectureSource).toMatch(/planeGeometry|sphereGeometry/);
+    expect(architectureSource).not.toMatch(/TextureLoader|useTexture|backgroundImage|<img/i);
   });
 
   it("uses the shared semantic PBR material system across the vertical slice", () => {
@@ -104,6 +117,23 @@ describe("real-time experience boundary", () => {
       expect(asset.readUInt32LE(8)).toBe(asset.byteLength);
     }
     expect(reactorAsset.byteLength).toBeLessThan(2.5 * 1024 * 1024);
+  });
+
+  it("keeps the ER-09 production asset versioned while retaining legacy assets", () => {
+    const manifestSource = source("src/experience/assets/assetManifest.ts");
+    const productionAsset = readFileSync(
+      resolve(
+        process.cwd(),
+        "public/assets/experience/engine-room/production/cv_engine_room_er09.glb",
+      ),
+    );
+
+    expect(manifestSource).toContain("production/cv_engine_room_er09.glb");
+    expect(manifestSource).toContain("cv_core_reactor_v1.glb");
+    expect(manifestSource).toContain("cv_engine_room_cooling_manifold.glb");
+    expect(productionAsset.subarray(0, 4).toString("ascii")).toBe("glTF");
+    expect(productionAsset.readUInt32LE(4)).toBe(2);
+    expect(productionAsset.readUInt32LE(8)).toBe(productionAsset.byteLength);
   });
 
   it("keeps the authored Reactor hierarchy and energy semantics explicit", () => {

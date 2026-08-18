@@ -11,9 +11,11 @@ import {
   Eye,
   Gauge,
   Hammer,
+  House,
   KeyRound,
   Landmark,
   LockKeyhole,
+  Map,
   Network,
   Radio,
   RefreshCw,
@@ -49,11 +51,19 @@ import { deriveCoreState } from "./state/machines";
 import {
   ArtifactButton,
   ContextOverlay,
-  EnergyCore,
   ObservationBasin,
   RecessedLedger,
   WorldScene,
 } from "./components/world";
+import {
+  CoreReactor,
+  HallPortal,
+  SceneShell,
+  VaultPedestal,
+  WorkshopArtifact,
+  WorkshopForge,
+  type WorkshopBuildState,
+} from "./components/scenes/DiegeticScenes";
 import type {
   BackupReceipt,
   CoreStatus,
@@ -160,9 +170,13 @@ export default function SpatialApp() {
   const [copied, setCopied] = useState(false);
   const [broadcastConfirmed, setBroadcastConfirmed] = useState(false);
   const [workshopStation, setWorkshopStation] = useState<"personal" | null>(null);
+  const [workshopBuild, setWorkshopBuild] = useState<WorkshopBuildState>("empty");
   const [archiveStation, setArchiveStation] = useState<"backup" | "restore" | null>(null);
   const [communicationStation, setCommunicationStation] = useState<"receive" | "send" | null>(null);
   const [libraryTopic, setLibraryTopic] = useState<"about" | "reference" | "limits" | null>(null);
+  const [engineStation, setEngineStation] = useState<"core" | "network" | null>(null);
+  const [roomIndexOpen, setRoomIndexOpen] = useState(false);
+  const [blockPulse, setBlockPulse] = useState(false);
   const lang = preferences.language;
   const tr = (key: CopyKey) => t(lang, key);
   const qrUrl = useQr(receive?.address);
@@ -180,6 +194,7 @@ export default function SpatialApp() {
   const oldPassphraseRef = useRef<HTMLInputElement>(null);
   const newPassphraseRef = useRef<HTMLInputElement>(null);
   const newPassphraseConfirmRef = useRef<HTMLInputElement>(null);
+  const previousBlocksRef = useRef(core.blocks);
 
   const clearCreatePassphrases = () => clearPasswordInputs(passphraseRef, confirmRef);
   const clearChangePassphrases = () => clearPasswordInputs(
@@ -204,6 +219,15 @@ export default function SpatialApp() {
     setAmbient(preferences.ambientSound && !preferences.muted, preferences.volume);
   }, [preferences]);
 
+  useEffect(() => {
+    const previous = previousBlocksRef.current;
+    previousBlocksRef.current = core.blocks;
+    if (core.blocks <= previous) return;
+    setBlockPulse(true);
+    const timer = window.setTimeout(() => setBlockPulse(false), preferences.reducedMotion ? 20 : 900);
+    return () => window.clearTimeout(timer);
+  }, [core.blocks, preferences.reducedMotion]);
+
   const appendRpc = (next: RpcTrace[]) => setRpc((current) => [...next, ...current].slice(0, 24));
 
   const run = async (work: () => Promise<void>) => {
@@ -211,8 +235,10 @@ export default function SpatialApp() {
     setError("");
     try {
       await work();
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+      return false;
     } finally {
       setLoading(false);
     }
@@ -258,6 +284,9 @@ export default function SpatialApp() {
     setArchiveStation(null);
     setCommunicationStation(null);
     setLibraryTopic(null);
+    setEngineStation(null);
+    setRoomIndexOpen(false);
+    if (next === "workshop") setWorkshopBuild("empty");
     setScene(next);
     setError("");
   };
@@ -286,28 +315,44 @@ export default function SpatialApp() {
       return;
     }
     clearCreatePassphrases();
-    void run(async () => {
-      try {
-        if (mode === "demo") {
-          const item = { ...demoVaultItem, displayName: displayName || "New Personal Vault", walletName: walletName || "new_personal" };
-          const nextSnapshot = { ...demoSnapshot, vault: { ...demoSnapshot.vault, displayName: item.displayName, walletName: item.walletName } };
-          setVaults([item]);
-          setSelectedWallet(item.walletName);
-          setSnapshot(nextSnapshot);
-        } else {
-          const operation = await coreApi.createPersonalVault(walletName, displayName, passphrase);
-          appendRpc(operation.rpc);
-          setSelectedWallet(operation.data.walletName);
-          await refreshVaults();
-          const detail = await coreApi.getPersonalVault(operation.data.walletName);
-          setSnapshot(detail.data);
-          appendRpc(detail.rpc);
-        }
-        go("archive");
-      } finally {
-        clearCreatePassphrases();
+    setWorkshopBuild("forging");
+    setWorkshopStation(null);
+    void (async () => {
+      const forgeDuration = preferences.reducedMotion ? 20 : 900;
+      const [succeeded] = await Promise.all([
+        run(async () => {
+          try {
+            if (mode === "demo") {
+              const item = { ...demoVaultItem, displayName: displayName || "New Personal Vault", walletName: walletName || "new_personal" };
+              const nextSnapshot = { ...demoSnapshot, vault: { ...demoSnapshot.vault, displayName: item.displayName, walletName: item.walletName } };
+              setVaults([item]);
+              setSelectedWallet(item.walletName);
+              setSnapshot(nextSnapshot);
+            } else {
+              const operation = await coreApi.createPersonalVault(walletName, displayName, passphrase);
+              appendRpc(operation.rpc);
+              setSelectedWallet(operation.data.walletName);
+              await refreshVaults();
+              const detail = await coreApi.getPersonalVault(operation.data.walletName);
+              setSnapshot(detail.data);
+              appendRpc(detail.rpc);
+            }
+          } finally {
+            clearCreatePassphrases();
+          }
+        }),
+        new Promise<void>((resolve) => window.setTimeout(resolve, forgeDuration)),
+      ]);
+      setWorkshopBuild(succeeded ? "complete" : "key-seated");
+      if (!succeeded) {
+        setWorkshopStation("personal");
+        window.setTimeout(() => {
+          if (displayNameRef.current) displayNameRef.current.value = displayName;
+          if (walletNameRef.current) walletNameRef.current.value = walletName;
+          passphraseRef.current?.focus();
+        }, 0);
       }
-    });
+    })();
   };
 
   const createBackup = () => {
@@ -550,88 +595,106 @@ export default function SpatialApp() {
     <div className={`spatial-app scene-${scene}`} aria-busy={loading}>
       <a className="skip-link" href="#scene-main">Skip to room content</a>
       {isDemo && <div className="demo-ribbon">{tr("demo")}</div>}
-      <header className="status-rail">
-        <button className="brand" onClick={() => go("hall")} aria-label={tr("mainHall")}>
-          <span className="brand-mark"><KeyRound size={17} /></span>
-          <span>{tr("appName")}</span>
-        </button>
-        <div className="rail-status" aria-live="polite">
-          <StatusPill tone={chain === "MAIN" ? "warn" : "quiet"}>{chain}</StatusPill>
-          <StatusPill tone={core.connected || isDemo ? "ok" : "warn"}>
-            <span className="signal-dot" /> {core.connected ? tr("connected") : isDemo ? tr("demoMode") : tr("disconnected")}
-          </StatusPill>
-          <StatusPill tone={core.networkActive ? "ok" : "warn"}>
-            {core.networkActive ? tr("networkOn") : tr("networkOff")}
-          </StatusPill>
+
+      <header className="world-hud">
+        <div className="hud-cluster hud-left">
+          <button className="hud-seal" onClick={() => go("hall")} aria-label={tr("mainHall")} title={tr("appName")}>
+            <KeyRound size={17} />
+          </button>
+          {scene !== "hall" && <button className="hud-button hud-back" onClick={() => go("hall")}><ArrowLeft size={16} /><span>{tr("back")}</span></button>}
         </div>
-        <div className="rail-actions">
+
+        <div className="core-whisper" aria-live="polite">
+          <span className={`whisper-light ${core.connected || isDemo ? "is-live" : "is-offline"}`} />
+          <span>{chain}</span>
+          <span>{core.connected ? tr("connected") : isDemo ? tr("demoMode") : tr("disconnected")}</span>
+          <span>{core.networkActive ? tr("networkOn") : tr("networkOff")}</span>
+        </div>
+
+        <div className="hud-cluster hud-right">
           <button
-            className="icon-button"
+            className="hud-seal"
             onClick={() => updatePreferences({ muted: !preferences.muted })}
             aria-label={preferences.muted ? "Unmute" : "Mute"}
             title={preferences.muted ? "Unmute" : "Mute"}
           >
             {preferences.muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
           </button>
-          <button className="icon-button" onClick={() => setSettingsOpen(true)} aria-label={tr("settings")} title={tr("settings")}>
+          <button className="hud-seal" onClick={() => setSettingsOpen(true)} aria-label={tr("settings")} title={tr("settings")}>
             <Settings size={18} />
           </button>
         </div>
       </header>
 
-      <nav className="accessible-nav" aria-label="Rooms">
+      <button className="room-index-toggle" onClick={() => setRoomIndexOpen((open) => !open)} aria-expanded={roomIndexOpen} aria-controls="room-index" aria-label="Open accessible room index">
+        <Map size={18} /><span>Rooms</span>
+      </button>
+      <nav id="room-index" className={`room-index ${roomIndexOpen ? "is-open" : ""}`} aria-label="Rooms" aria-hidden={!roomIndexOpen}>
+        <header><House size={16} /><strong>Room index</strong><button tabIndex={roomIndexOpen ? 0 : -1} onClick={() => setRoomIndexOpen(false)} aria-label="Close room index"><X size={16} /></button></header>
         {sceneMeta.map(({ id, label }) => (
-          <button key={id} onClick={() => go(id)} aria-current={scene === id ? "page" : undefined}>{tr(label)}</button>
+          <button key={id} tabIndex={roomIndexOpen ? 0 : -1} onClick={() => go(id)} aria-current={scene === id ? "page" : undefined}>{tr(label)}</button>
         ))}
       </nav>
 
-      {scene !== "hall" && (
-        <button className="back-hall" onClick={() => go("hall")}>
-          <ArrowLeft size={16} /> {tr("back")}
-        </button>
-      )}
-
       <main id="scene-main" className="scene-stage">
-        <div className="sky-glow" aria-hidden="true" />
-        <div className="sea-line" aria-hidden="true" />
         {scene === "hall" && (
-          <WorldScene scene="hall" eyebrow="LOCAL BITCOIN OPERATIONS" title={tr("mainHall")} description={tr("welcomeBody")}>
+          <SceneShell scene="hall" eyebrow="Core Vault" title={tr("mainHall")} description={tr("welcomeBody")}>
             {!isDemo && !core.supported && <div className="offline-gate" role="status">
               <CircleAlert size={22} />
               <span><strong>{tr("disconnected")}</strong><small>{core.message}</small></span>
               <button className="secondary-action" onClick={() => void connect()} disabled={loading}><RefreshCw size={16} /> {tr("reconnect")}</button>
               <button className="primary-action" onClick={() => { setMode("demo"); setCore(demoSpatialCore); setVaults([demoVaultItem]); setSelectedWallet(demoVaultItem.walletName); setSnapshot(demoSnapshot); }}>{tr("demoMode")}</button>
             </div>}
-            <div className="hall-portals" aria-label="Architectural passages">
-              <ArtifactButton kind="portal" title={tr("workshop")} description="Construct and configure" className="portal-workshop" onClick={() => go("workshop")} />
-              <ArtifactButton kind="portal" title={tr("archive")} description="Protect and recover" className="portal-archive" onClick={() => go("archive")} />
-              <ArtifactButton kind="portal" title={tr("communications")} description="Receive and send" className="portal-communications" onClick={() => go("communications")} />
-              <ArtifactButton kind="portal" title={tr("engine")} description="Operate local Core" className="portal-engine" onClick={() => go("engine")} />
-              <ArtifactButton kind="portal" title={tr("observatory")} description="Observe the chain" className="portal-observatory" onClick={() => go("observatory")} />
-              <ArtifactButton kind="portal" title={tr("library")} description="Understand the system" className="portal-library" onClick={() => go("library")} />
+            <div className="hall-complex" aria-label="Architectural passages">
+              <div className="hall-floor-network" aria-hidden="true"><i /><i /><i /><i /><i /><i /></div>
+              <HallPortal room="workshop" label={tr("workshop")} hint="Vault construction" onActivate={() => go("workshop")} />
+              <HallPortal room="archive" label={tr("archive")} hint="Recovery capsules" onActivate={() => go("archive")} />
+              <HallPortal room="communications" label={tr("communications")} hint="Signal channels" onActivate={() => go("communications")} />
+              <HallPortal room="engine" label={tr("engine")} hint="Local Core reactor" onActivate={() => go("engine")} />
+              <HallPortal room="observatory" label={tr("observatory")} hint="Chain horizon" onActivate={() => go("observatory")} />
+              <HallPortal room="library" label={tr("library")} hint="Knowledge archive" onActivate={() => go("library")} />
             </div>
-            <div className="hall-vault-gallery" aria-label="Vault chambers">
+            <div className="hall-vault-dais" aria-label="Vault chambers">
               {vaults.length === 0 ? (
-                <ArtifactButton kind="empty" title={tr("noVault")} description={tr("createVault")} onClick={() => go("workshop")} />
+                <VaultPedestal empty label={tr("noVault")} detail={tr("createVault")} onActivate={() => go("workshop")} />
               ) : vaults.map((item) => (
-                <ArtifactButton key={item.walletName} kind="vault" title={item.displayName} description={item.vaultType} status={formatSats(item.balanceSats)} onClick={() => void loadVault(item.walletName)} />
+                <VaultPedestal key={item.walletName} label={item.displayName} detail={item.vaultType} balance={formatSats(item.balanceSats)} onActivate={() => void loadVault(item.walletName)} />
               ))}
             </div>
-          </WorldScene>
+          </SceneShell>
         )}
 
         {scene === "workshop" && (
-          <WorldScene scene="workshop" eyebrow="DESCRIPTOR WALLET FOUNDRY" title={tr("workshop")} description="Choose the physical policy first. Precise wallet controls appear only at the active workbench.">
-            <div className="workshop-floor">
-              <div className="workbench-monument" aria-hidden="true"><span className="bench-slab" /><span className="bench-energy" /><span className="unfinished-vault"><i /><i /><i /></span></div>
-              <div className="workshop-artifacts">
-                <ArtifactButton kind="key" title={tr("personal")} description={tr("personalDesc")} status="One encrypted key" onClick={() => setWorkshopStation("personal")} />
-                <ArtifactButton kind="keys" title={tr("multisig")} description={tr("multisigDesc")} status="Three keys · two required" onClick={() => setLegacyOpen(true)} />
-                <ArtifactButton kind="empty" title="Time-lock module" description="Reserved workbench for a future, separately reviewed policy" status={tr("future")} disabled />
-              </div>
+          <SceneShell scene="workshop" eyebrow="Descriptor forge" title={tr("workshop")} description="Seat a vault frame, choose its signing key, and let the local Core forge the encrypted wallet.">
+            <div className={`workshop-room build-${workshopBuild}`}>
+              <div className="workshop-conduit-bed" aria-hidden="true"><i /><i /><i /></div>
+              <WorkshopForge
+                state={workshopBuild}
+                onActivate={() => {
+                  if (workshopBuild === "key-seated") setWorkshopStation("personal");
+                  if (workshopBuild === "complete") go("archive");
+                }}
+              />
+              <WorkshopArtifact
+                kind="vault"
+                label="Personal vault frame"
+                hint={workshopBuild === "empty" ? "Place on the forge" : "Frame seated"}
+                active={workshopBuild !== "empty"}
+                onActivate={() => setWorkshopBuild("vault-placed")}
+              />
+              <WorkshopArtifact
+                kind="key"
+                label="Signing key"
+                hint={workshopBuild === "vault-placed" ? "Seat beside the vault" : workshopBuild === "empty" ? "Choose the vault frame first" : "One key opens this vault"}
+                active={["key-seated", "forging", "complete"].includes(workshopBuild)}
+                disabled={workshopBuild === "empty" || workshopBuild === "forging" || workshopBuild === "complete"}
+                onActivate={() => setWorkshopBuild("key-seated")}
+              />
+              <WorkshopArtifact kind="multisig" label={tr("multisig")} hint="Three keys · two required" onActivate={() => setLegacyOpen(true)} />
+              <WorkshopArtifact kind="timelock" label="Time-lock mechanism" hint={tr("future")} disabled />
             </div>
             {workshopStation === "personal" && <ContextOverlay eyebrow="ACTIVE WORKBENCH · SINGLE SIGNATURE" title={tr("createPersonal")} onClose={() => { clearCreatePassphrases(); setWorkshopStation(null); }}>
-                <p>{tr("personalDesc")}</p>
+                <p>The frame and its single signing key are seated. Add only the precise details Core needs to forge the encrypted descriptor wallet.</p>
                 <form className="form-grid" onSubmit={createPersonal}>
                   <Field label={tr("displayName")}><input ref={displayNameRef} required minLength={2} placeholder="Harbour Vault" autoComplete="off" /></Field>
                   <Field label={tr("walletName")}><input ref={walletNameRef} required pattern="[A-Za-z0-9._-]+" placeholder="harbour_vault" autoComplete="off" /></Field>
@@ -641,7 +704,7 @@ export default function SpatialApp() {
                   {!mutationsAllowed && <small className="stop-note">STOP: wallet mutations are available only on Signet, Testnet4, Testnet, or Regtest.</small>}
                 </form>
             </ContextOverlay>}
-          </WorldScene>
+          </SceneShell>
         )}
 
         {scene === "vault" && (
@@ -731,24 +794,37 @@ export default function SpatialApp() {
         )}
 
         {scene === "engine" && (
-          <WorldScene scene="engine" eyebrow="LOCAL NODE ENGINE" title={tr("engine")} description={tr("networkTruth")}>
-            <div className="engine-chamber">
-              <EnergyCore active={core.networkActive} progress={core.verificationProgress * 100} label={core.networkActive ? tr("networkOn") : tr("networkOff")} detail={coreState.replaceAll("-", " ")} />
-              <div className="engine-conduit-rack" aria-hidden="true">{Array.from({ length: 5 }, (_, index) => <i key={index} />)}</div>
-              <div className="engine-instruments">
-                <Metric label={tr("sync")} value={`${(core.verificationProgress * 100).toFixed(2)}%`} detail={core.initialBlockDownload ? "Initial block download" : "Current"} />
-                <Metric label={tr("peers")} value={String(core.connections)} detail={core.networkActive ? "P2P enabled" : "P2P disabled"} />
-                <Metric label={tr("blocks")} value={`${core.blocks.toLocaleString()} / ${core.headers.toLocaleString()}`} detail={core.pruned ? "Pruned" : "Full chain data"} />
-                <Metric label={tr("mempool")} value={`${core.mempoolSize.toLocaleString()} tx`} detail={formatBytes(core.mempoolBytes)} />
-                <Metric label={tr("disk")} value={formatBytes(core.sizeOnDisk)} detail="Reported by Bitcoin Core" />
-                <Metric label="Core version" value={core.versionLabel ?? "Unknown"} detail={core.subversion ?? ""} />
-              </div>
-              <div className="engine-control-plinth">
-                <span><strong>{core.networkActive ? "Peer conduits flowing" : "Peer conduits still"}</strong><small>{tr("networkTruth")}</small></span>
-                <button className={core.networkActive ? "danger-action" : "primary-action"} onClick={toggleNetwork} disabled={loading || (!core.supported && !isDemo)}>{core.networkActive ? tr("disableNetwork") : tr("enableNetwork")}</button>
-              </div>
-            </div>
-          </WorldScene>
+          <SceneShell scene="engine" eyebrow="Local Bitcoin Core" title={tr("engine")} description={tr("networkTruth")}>
+            <CoreReactor
+              connected={core.connected || isDemo}
+              networkActive={core.networkActive}
+              syncing={core.initialBlockDownload || core.verificationProgress < .9999}
+              progress={core.verificationProgress}
+              peers={core.connections}
+              blocks={core.blocks}
+              blockPulse={blockPulse}
+              onInspectCore={() => setEngineStation("core")}
+              onInspectNetwork={() => setEngineStation("network")}
+              onToggleNetwork={toggleNetwork}
+              toggleDisabled={loading || (!core.supported && !isDemo)}
+            />
+            {engineStation === "core" && <ContextOverlay eyebrow="REACTOR CORE · LOCAL EVIDENCE" title="Bitcoin Core state" onClose={() => setEngineStation(null)}>
+              <dl className="engine-evidence">
+                <dt>Core state</dt><dd>{isDemo ? "local demonstration" : coreState.replaceAll("-", " ")}</dd>
+                <dt>Version</dt><dd>{core.versionLabel ?? "Unknown"}</dd>
+                <dt>Chain</dt><dd>{chain}</dd>
+                <dt>Blocks / headers</dt><dd>{core.blocks.toLocaleString()} / {core.headers.toLocaleString()}</dd>
+                <dt>Synchronization</dt><dd>{(core.verificationProgress * 100).toFixed(2)}%</dd>
+                <dt>Chain data</dt><dd>{formatBytes(core.sizeOnDisk)} · {core.pruned ? "pruned" : "full"}</dd>
+                <dt>Mempool</dt><dd>{core.mempoolSize.toLocaleString()} tx · {formatBytes(core.mempoolBytes)}</dd>
+              </dl>
+            </ContextOverlay>}
+            {engineStation === "network" && <ContextOverlay eyebrow="PEER MANIFOLD · EXTERNAL CONDUITS" title={core.networkActive ? "P2P network active" : "P2P network disabled"} onClose={() => setEngineStation(null)}>
+              <p>{tr("networkTruth")}</p>
+              <dl className="engine-evidence"><dt>Exact peer count</dt><dd>{core.connections}</dd><dt>Core reactor</dt><dd>{core.connected || isDemo ? "Running locally" : "Disconnected"}</dd><dt>External conduits</dt><dd>{core.networkActive ? "Open" : "Closed"}</dd></dl>
+              <button className={core.networkActive ? "danger-action" : "primary-action"} onClick={toggleNetwork} disabled={loading || (!core.supported && !isDemo)}>{core.networkActive ? tr("disableNetwork") : tr("enableNetwork")}</button>
+            </ContextOverlay>}
+          </SceneShell>
         )}
 
         {scene === "observatory" && (

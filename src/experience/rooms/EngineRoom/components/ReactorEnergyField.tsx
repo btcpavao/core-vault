@@ -17,12 +17,12 @@ interface ReactorEnergyFieldProps {
   reducedMotion: boolean;
 }
 
-const BLUE = "#38b9f1";
-const BLUE_CORE = "#bcefff";
-const GOLD = "#dc8f27";
-const PULSE_SECONDS = 1.5;
-const STRAND_COUNT = 12;
-const PACKET_COUNT = 7;
+const BLUE = "#31baf2";
+const BLUE_CORE = "#d5f7ff";
+const GOLD = "#e2a13d";
+const PULSE_SECONDS = 1.35;
+const STRAND_COUNT = 16;
+const PACKET_COUNT = 8;
 
 function buildHelixStrands(count: number, turbulence: number, gold = false) {
   return Array.from({ length: count }, (_, strandIndex) => {
@@ -86,15 +86,17 @@ export function ReactorEnergyField({
   );
   const blueMaterial = useMemo(() => createEnergyMaterial(BLUE, 0.34), []);
   const blueCoreMaterial = useMemo(() => createEnergyMaterial(BLUE_CORE, 0.16), []);
+  const blueVeilMaterial = useMemo(() => createEnergyMaterial(BLUE, 0.02), []);
   const goldMaterial = useMemo(() => createEnergyMaterial(GOLD, 0), []);
 
   useEffect(
     () => () => {
       blueMaterial.dispose();
       blueCoreMaterial.dispose();
+      blueVeilMaterial.dispose();
       goldMaterial.dispose();
     },
-    [blueCoreMaterial, blueMaterial, goldMaterial],
+    [blueCoreMaterial, blueMaterial, blueVeilMaterial, goldMaterial],
   );
 
   useEffect(() => {
@@ -108,8 +110,10 @@ export function ReactorEnergyField({
     blueMaterial.emissiveIntensity = 0.55 + activeOpacity * 1.15;
     blueCoreMaterial.opacity = 0.025 + activeOpacity * 0.12;
     blueCoreMaterial.emissiveIntensity = 0.7 + activeOpacity * 1.35;
+    blueVeilMaterial.opacity = 0.008 + activeOpacity * 0.028;
+    blueVeilMaterial.emissiveIntensity = 0.36 + activeOpacity * 0.48;
 
-    const motionScale = reducedMotion ? 0.055 : 1;
+    const motionScale = reducedMotion ? 0 : 1;
     if (fieldRef.current) {
       fieldRef.current.rotation.y += delta * energyState.flowRate * motionScale;
     }
@@ -120,8 +124,10 @@ export function ReactorEnergyField({
     packetRefs.current.forEach((packet, index) => {
       if (!packet) return;
       packet.visible = energyState.coreActive;
-      const cadence = reducedMotion ? 0.002 : energyState.mode === "syncing" ? 0.14 : 0.042;
-      const progress = (clock.elapsedTime * cadence + index / PACKET_COUNT) % 1;
+      const cadence = energyState.mode === "syncing" ? 0.12 : 0.036;
+      const progress = reducedMotion
+        ? (index + 1) / (PACKET_COUNT + 1)
+        : (clock.elapsedTime * cadence + index / PACKET_COUNT) % 1;
       blueStrands[index].getPointAt(progress, packet.position);
       const breathing = reducedMotion ? 0.78 : 0.78 + Math.sin(progress * Math.PI) * 0.28;
       packet.scale.setScalar(breathing);
@@ -131,8 +137,8 @@ export function ReactorEnergyField({
       blueLightRef.current.intensity = energyState.coreActive
         ? energyState.mode === "syncing"
           ? 8.2
-          : 5.8
-        : 0.18;
+          : 6.8
+        : 0.14;
     }
 
     pulseRemainingRef.current = Math.max(0, pulseRemainingRef.current - delta);
@@ -143,7 +149,7 @@ export function ReactorEnergyField({
     if (counterFieldRef.current && !reducedMotion) {
       counterFieldRef.current.scale.setScalar(1 + pulse * 0.018);
     }
-    if (goldLightRef.current) goldLightRef.current.intensity = pulse * 8.5;
+    if (goldLightRef.current) goldLightRef.current.intensity = pulse * 6.8;
     if (validationRingRef.current) {
       validationRingRef.current.visible = pulseRemainingRef.current > 0;
       validationRingRef.current.position.y = 0.8 + pulseProgress * 2.55;
@@ -154,6 +160,10 @@ export function ReactorEnergyField({
   return (
     <group name={`reactor-energy-${energyState.mode}`}>
       <group ref={fieldRef}>
+        <mesh position={[0, 2.12, 0]}>
+          <cylinderGeometry args={[0.76, 0.76, 2.48, 48, 1, true]} />
+          <primitive object={blueVeilMaterial} attach="material" />
+        </mesh>
         {blueStrands.map((curve, index) => (
           <mesh key={`blue-${index}`}>
             <tubeGeometry
@@ -163,6 +173,12 @@ export function ReactorEnergyField({
               object={index % 4 === 0 ? blueCoreMaterial : blueMaterial}
               attach="material"
             />
+          </mesh>
+        ))}
+        {[1.14, 1.62, 2.12, 2.62, 3.1].map((height, index) => (
+          <mesh key={height} position={[0, height, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.56 + (index % 2) * 0.08, 0.009, 5, 52]} />
+            <primitive object={blueMaterial} attach="material" />
           </mesh>
         ))}
       </group>

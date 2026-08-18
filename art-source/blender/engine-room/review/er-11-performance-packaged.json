@@ -1,0 +1,68 @@
+{
+  "gate": "ER-11",
+  "decision": "FAIL",
+  "capturedAt": "2026-08-17T20:18:00+02:00",
+  "environment": {
+    "machine": "MacBook Air (MacBookAir10,1)",
+    "cpu": "Apple M1, 8 cores (4 performance, 4 efficiency)",
+    "gpu": "Apple M1, 7 cores",
+    "ramGiB": 8,
+    "os": "macOS 26.5.2 (25F84), Darwin 25.5.0",
+    "power": "battery",
+    "lowPowerMode": true,
+    "tauriApi": "1.6.0",
+    "tauriCli": "1.6.3",
+    "tauriRust": "1.8.3",
+    "webview": "system WebKit via wry 0.24.12",
+    "buildType": "Tauri release app bundle",
+    "windowCssPixels": [1240, 820],
+    "capturedWindowPixels": [1162, 768],
+    "dpr": 1,
+    "bitcoinCore": "isolated regtest, RPC 127.0.0.1:19443, block height 101-104"
+  },
+  "artifact": {
+    "productName": "Core Vault ER11 QA",
+    "identifier": "com.corevault.er11.qa",
+    "executableSha256": "d4fffdf74d6564540e63e8263df174d36279916356667c7ed68241a225cf93bf",
+    "appBundleKiB": 16112,
+    "executableBytes": 16492032,
+    "glbBytes": 18853768
+  },
+  "sampling": {
+    "warmupSeconds": 1.5,
+    "measurementSeconds": 8,
+    "note": "A-F distributions were captured from the packaged release immediately before the lifecycle-only Canvas ownership correction. The active renderer, GLB, camera, lights, materials and animation stack are identical to the final artifact. The final artifact passed visual and lifecycle rechecks, but its automated timing rerun could not remain foreground under the controller. Low Power Mode capped all valid packaged samples at 30 Hz."
+  },
+  "scenarios": {
+    "A": {"label":"idle hero","durationMs":8033,"frames":241,"averageFps":30.001,"averageFrameMs":33.332,"medianMs":33,"p95Ms":36,"p99Ms":38,"maxMs":40,"over20Ms":241,"over33_3Ms":94,"over50Ms":0,"averageCalls":46.651,"averageTriangles":408983,"maxGeometries":67,"maxTextures":5},
+    "B_first": {"label":"first camera transition","durationMs":8033,"frames":241,"averageFps":30.001,"averageFrameMs":33.332,"medianMs":33,"p95Ms":35,"p99Ms":35,"maxMs":48,"over20Ms":241,"over33_3Ms":94,"over50Ms":0,"averageCalls":40.465,"averageTriangles":399973,"maxGeometries":67,"maxTextures":5},
+    "B_warm": {"label":"warm camera transition","durationMs":8000,"frames":240,"averageFps":30.000,"averageFrameMs":33.333,"medianMs":33,"p95Ms":34,"p99Ms":35,"maxMs":40,"over20Ms":240,"over33_3Ms":94,"over50Ms":0,"averageCalls":40.417,"averageTriangles":399692,"maxGeometries":67,"maxTextures":5},
+    "C": {"label":"reactor close-up","durationMs":8033,"frames":241,"averageFps":30.001,"averageFrameMs":33.332,"medianMs":33,"p95Ms":34,"p99Ms":35,"maxMs":35,"over20Ms":241,"over33_3Ms":94,"over50Ms":0,"averageCalls":40.705,"averageTriangles":405407,"maxGeometries":67,"maxTextures":5},
+    "D": {"label":"node unavailable / dormant","durationMs":8033,"frames":241,"averageFps":30.001,"averageFrameMs":33.332,"medianMs":33,"p95Ms":37,"p99Ms":41,"maxMs":53,"over20Ms":241,"over33_3Ms":94,"over50Ms":1,"averageCalls":45.776,"averageTriangles":408857,"maxGeometries":66,"maxTextures":5},
+    "E": {"label":"reduced motion","durationMs":8001,"frames":240,"averageFps":29.998,"averageFrameMs":33.336,"medianMs":33,"p95Ms":34,"p99Ms":40,"maxMs":41,"over20Ms":240,"over33_3Ms":94,"over50Ms":0,"averageCalls":45.776,"averageTriangles":408857,"maxGeometries":66,"maxTextures":5},
+    "F": {"label":"console inspection","durationMs":8001,"frames":240,"averageFps":29.996,"averageFrameMs":33.338,"medianMs":33,"p95Ms":35,"p99Ms":35,"maxMs":35,"over20Ms":240,"over33_3Ms":94,"over50Ms":0,"averageCalls":32.625,"averageTriangles":334159,"maxGeometries":67,"maxTextures":5}
+  },
+  "startup": {
+    "freshProcessModelReadyMs": [1784, 1881, 1924, 2012, 2281],
+    "freshProcessFirstRenderMs": [1789, 1887, 1929, 2017, 2330],
+    "modelReadyMinMedianMaxMs": [1784, 1924, 2281],
+    "firstRenderMinMedianMaxMs": [1789, 1929, 2330],
+    "classification": "successive clean process launches with warm OS filesystem cache; comparable to ER-10b 1.97-2.09 s context"
+  },
+  "soak": {
+    "durationMinutes": 5,
+    "mode": "packaged background/foreground lifecycle observation",
+    "mainProcessRssKiB": [65376,65072,65392,63312,58928,58832,58896,58896,58896,58848],
+    "gpuProcessRssKiB": [12112,12112,12096,9968,9504,9392,9408,9408,9408,9408],
+    "webContentRssKiB": [11040,11152,11520,9728,9888,9792,10000,10000,13664,9808],
+    "contextLosses": 0,
+    "errorsObserved": 0,
+    "result": "stable but shorter than the recommended 30 minutes"
+  },
+  "thresholdResult": {
+    "staticApproximately60Fps": false,
+    "cameraSafelyAbove45Fps": false,
+    "environmentConstraint": "macOS battery Low Power Mode was enabled and imposed a stable 30 Hz RAF ceiling",
+    "rerunRequired": "AC power with Low Power Mode disabled"
+  }
+}

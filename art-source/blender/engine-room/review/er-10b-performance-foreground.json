@@ -1,0 +1,35 @@
+{
+  "pass": "ER-10b",
+  "capturedOn": "2026-08-17",
+  "method": "Foreground Core Vault ER10B QA.app held active with macOS Computer Use; sampler warmup 1.5 s and sample 8 s; values read from the in-app deterministic QA output.",
+  "environment": {
+    "machine": "Apple M1 development machine",
+    "runtime": "Tauri debug app / WebKit",
+    "window": "1240 x 820 logical",
+    "dpr": 1,
+    "dynamicLights": 5,
+    "shadowMaps": 1,
+    "shadowMapSize": "512 x 512",
+    "postPasses": 0,
+    "regtestBlockHeight": 101
+  },
+  "final": {
+    "A": { "durationMs": 8000.000000000002, "frames": 480, "averageFps": 59.999999999999986, "averageFrameTimeMs": 16.66666666666667, "p95FrameTimeMs": 22, "averageRenderCalls": 48.770833333333336, "averageTriangles": 436827.39166666666, "maxGeometries": 66, "maxTextures": 5 },
+    "B": { "durationMs": 8018, "frames": 476, "averageFps": 59.36642554252931, "averageFrameTimeMs": 16.84453781512605, "p95FrameTimeMs": 18, "averageRenderCalls": 43.247899159663866, "averageTriangles": 429199.6302521008, "maxGeometries": 67, "maxTextures": 5 },
+    "C": { "durationMs": 8017, "frames": 481, "averageFps": 59.99750530123487, "averageFrameTimeMs": 16.66735966735967, "p95FrameTimeMs": 18, "averageRenderCalls": 43.07276507276507, "averageTriangles": 430202.6735966736, "maxGeometries": 67, "maxTextures": 5 },
+    "D": { "durationMs": 8017, "frames": 481, "averageFps": 59.99750530123487, "averageFrameTimeMs": 16.66735966735967, "p95FrameTimeMs": 18, "averageRenderCalls": 48.67359667359668, "averageTriangles": 435919.2557172557, "maxGeometries": 66, "maxTextures": 5, "state": "real local node unavailable; connection unknown; Reactor energy dormant" },
+    "E": { "durationMs": 8017, "frames": 481, "averageFps": 59.99750530123487, "averageFrameTimeMs": 16.66735966735967, "p95FrameTimeMs": 23, "averageRenderCalls": 48.67359667359668, "averageTriangles": 435919.2557172557, "maxGeometries": 66, "maxTextures": 5 },
+    "F": { "durationMs": 8013, "frames": 481, "averageFps": 60.027455384999385, "averageFrameTimeMs": 16.659043659043657, "p95FrameTimeMs": 22, "averageRenderCalls": 34.74428274428274, "averageTriangles": 357282.19126819127, "maxGeometries": 67, "maxTextures": 5 }
+  },
+  "isolatedCosts": {
+    "staticIndirectOffShadowOffA": { "averageFps": 60.00499001996009, "averageFrameTimeMs": 16.66528066528066, "p95FrameTimeMs": 23.00000000000091, "averageRenderCalls": 48.67359667359668, "averageTriangles": 435919.2557172557, "maxGeometries": 66, "maxTextures": 4 },
+    "staticIndirectOnShadowOffA": { "averageFps": 60.034947578632064, "averageFrameTimeMs": 16.656964656964654, "p95FrameTimeMs": 23, "averageRenderCalls": 48.67151767151767, "averageTriangles": 435919.23076923075, "maxGeometries": 66, "maxTextures": 4 },
+    "staticIndirectOnShadowOnA": { "averageFps": 59.999999999999986, "averageFrameTimeMs": 16.66666666666667, "p95FrameTimeMs": 22, "averageRenderCalls": 48.770833333333336, "averageTriangles": 436827.39166666666, "maxGeometries": 66, "maxTextures": 5 }
+  },
+  "firstRenderMs": {
+    "freshPackage": 2088,
+    "warm": [1973, 1996],
+    "modelReadyFreshPackage": 1763.0000000000002,
+    "modelReadyWarm": [1644.0000000000002, 1640.0000000000002]
+  }
+}
