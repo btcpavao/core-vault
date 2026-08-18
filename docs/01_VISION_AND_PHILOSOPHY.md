@@ -80,6 +80,8 @@ Core Vault should not feel like:
 
 It should feel like entering a **place**.
 
+In this specification, **spatial**, **world**, **place**, and **environment** describe the user's mental model, orientation, and interaction model. They do not require every visible surface or room to exist as complete real-time 3D geometry. A curated, layered scene can satisfy the vision when it preserves spatial memory, object-centred interaction, environmental state, and the feeling of inhabiting one coherent place.
+
 ---
 
 # 4. Core Vault Is a Place
@@ -650,9 +652,9 @@ These images serve as:
 - color references
 - visual language references
 
-They are **not final application backgrounds**.
+They are **not wallpaper for a conventional application**.
 
-They should not simply be placed behind HTML interfaces.
+Authored imagery may participate in a final semantic scene package, but it must not simply be placed behind unrelated HTML interfaces, vector effects, or generic hotspots. Final scene layers must be designed for the room's function and share one coherent perspective, material, lighting, and atmospheric system.
 
 Core Vault requires new environments specifically designed around the function of each room.
 
@@ -988,7 +990,7 @@ The desktop application should not be visually constrained by assumptions inheri
 
 # 30. The Technology Must Serve the Experience
 
-The visual ambition of Core Vault may require technologies normally associated with interactive real-time environments.
+The visual ambition of Core Vault may require technologies associated with cinematic compositing, interactive real-time environments, or both.
 
 The project should not insist on conventional web rendering if that prevents the intended experience.
 
@@ -1000,9 +1002,11 @@ The implementation may ultimately use:
 - another appropriate scene engine
 - native rendering
 - layered 2.5D techniques
+- depth maps, semantic masks, and state-driven compositing
+- high-fidelity authored scene layers
 - a hybrid architecture
 
-The exact technology is a technical decision.
+The exact technology is a technical decision. No single rendering technology is foundational or mandatory for every room.
 
 The non-negotiable product requirement is:
 

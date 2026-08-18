@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "gate": "ER-11b",
+  "artifact": {
+    "path": "/Users/pavao/Desktop/Core Vault/src-tauri/target/release/bundle/macos/Core Vault ER11b QA.app",
+    "bundleIdentifier": "com.corevault.er11b.qa",
+    "executableSha256": "883b3cdc8761e12b51ad8ed1ad10302afd0aa5d87385d8f8ea77359b2e2bbe97"
+  },
+  "test": {
+    "startedAt": "2026-08-17T22:48:05+02:00",
+    "completedAt": "2026-08-17T23:18:06+02:00",
+    "requiredMinutes": 30,
+    "observedMinutes": 31,
+    "foregroundConfirmedByOperator": true,
+    "configuration": "normal production Engine Room; isolated local regtest connected; hero dominant; occasional authored camera transitions",
+    "powerSource": "AC Power",
+    "lowPowerMode": 0,
+    "mainPid": 24781,
+    "gpuPid": 24790,
+    "webContentPid": 24792
+  },
+  "samples": [
+    {
+      "minute": 0,
+      "timestamp": "2026-08-17T22:48:05+02:00",
+      "powerSource": "AC Power",
+      "lowPowerMode": 0,
+      "applicationRssKiB": 15984,
+      "gpuProcessRssKiB": 7632,
+      "webContentRssKiB": 4640,
+      "applicationCpuPercent": 0.0,
+      "gpuProcessCpuPercent": 0.0,
+      "webContentCpuPercent": 0.0,
+      "connection": "online"
+    },
+    {
+      "minute": 5,
+      "timestamp": "2026-08-17T22:53:05+02:00",
+      "powerSource": "AC Power",
+      "lowPowerMode": 0,
+      "applicationRssKiB": 16800,
+      "gpuProcessRssKiB": 7136,
+      "webContentRssKiB": 4960,
+      "applicationCpuPercent": 0.0,
+      "gpuProcessCpuPercent": 0.0,
+      "webContentCpuPercent": 0.0,
+      "connection": "online"
+    },
+    {
+      "minute": 10,
+      "timestamp": "2026-08-17T22:58:05+02:00",
+      "powerSource": "AC Power",
+      "lowPowerMode": 0,
+      "applicationRssKiB": 22896,
+      "gpuProcessRssKiB": 11072,
+      "webContentRssKiB": 9440,
+      "applicationCpuPercent": 0.0,
+      "gpuProcessCpuPercent": 0.0,
+      "webContentCpuPercent": 0.0,
+      "connection": "online"
+    },
+    {
+      "minute": 15,
+      "timestamp": "2026-08-17T23:03:05+02:00",
+      "powerSource": "AC Power",
+      "lowPowerMode": 0,
+      "applicationRssKiB": 29616,
+      "gpuProcessRssKiB": 11264,
+      "webContentRssKiB": 9440,
+      "applicationCpuPercent": 0.0,
+      "gpuProcessCpuPercent": 0.0,
+      "webContentCpuPercent": 0.0,
+      "connection": "online"
+    },
+    {
+      "minute": 20,
+      "timestamp": "2026-08-17T23:08:06+02:00",
+      "powerSource": "AC Power",
+      "lowPowerMode": 0,
+      "applicationRssKiB": 17248,
+      "gpuProcessRssKiB": 7648,
+      "webContentRssKiB": 5488,
+      "applicationCpuPercent": 0.0,
+      "gpuProcessCpuPercent": 0.0,
+      "webContentCpuPercent": 0.0,
+      "connection": "online"
+    },
+    {
+      "minute": 25,
+      "timestamp": "2026-08-17T23:13:06+02:00",
+      "powerSource": "AC Power",
+      "lowPowerMode": 0,
+      "applicationRssKiB": 18128,
+      "gpuProcessRssKiB": 7104,
+      "webContentRssKiB": 6672,
+      "applicationCpuPercent": 0.0,
+      "gpuProcessCpuPercent": 0.0,
+      "webContentCpuPercent": 0.0,
+      "connection": "online"
+    },
+    {
+      "minute": 30,
+      "timestamp": "2026-08-17T23:18:06+02:00",
+      "powerSource": "AC Power",
+      "lowPowerMode": 0,
+      "applicationRssKiB": 18080,
+      "gpuProcessRssKiB": 7104,
+      "webContentRssKiB": 6080,
+      "applicationCpuPercent": 0.0,
+      "gpuProcessCpuPercent": 0.0,
+      "webContentCpuPercent": 0.0,
+      "connection": "online"
+    }
+  ],
+  "foregroundHeroBaseline": {
+    "capturedAt": "2026-08-17T20:40:41.707Z",
+    "scenario": "A",
+    "durationMs": 8034,
+    "frames": 478,
+    "averageFps": 59.49713716704009,
+    "p95FrameMs": 20,
+    "p99FrameMs": 31,
+    "maxFrameMs": 48
+  },
+  "postSoakRendererSnapshot": {
+    "elapsedSinceNavigationMs": 2664381.9999999995,
+    "geometries": 66,
+    "textures": 5,
+    "programs": 10
+  },
+  "health": {
+    "processDeaths": 0,
+    "webglContextLosses": 0,
+    "recurringRuntimeErrors": 0,
+    "duplicateAnimationLoopsObserved": 0,
+    "stateDriftObserved": false,
+    "memoryConclusion": "bounded; transient midpoint peak returned close to the start range by minute 20 and remained bounded through minute 30"
+  }
+}

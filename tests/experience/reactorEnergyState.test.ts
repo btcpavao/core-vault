@@ -29,7 +29,7 @@ describe("Reactor energy projection", () => {
       mode: "dormant",
       coreActive: false,
       networkFlowActive: false,
-      blueIntensity: 0.035,
+      blueIntensity: 0.028,
       goldBaseline: 0,
     });
   });
@@ -51,7 +51,7 @@ describe("Reactor energy projection", () => {
     expect(energy.mode).toBe("stable");
     expect(energy.coreActive).toBe(true);
     expect(energy.flowRate).toBeLessThan(0.1);
-    expect(energy.goldBaseline).toBeLessThan(0.02);
+    expect(energy.goldBaseline).toBe(0);
   });
 
   it("keeps the local Reactor alive while external network conduits are inactive", () => {

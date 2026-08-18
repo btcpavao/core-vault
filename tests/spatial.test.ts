@@ -8,12 +8,23 @@ import { canTransitionPsbt, deriveCoreState } from "../src/state/machines";
 const projectFile = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
 describe("spatial product contract", () => {
-  it("exposes all eight rooms as semantic scene ids", () => {
+  it("exposes all eight rooms through the fallback room index", () => {
     const app = projectFile("src/SpatialApp.tsx");
     for (const scene of ["hall", "workshop", "vault", "archive", "communications", "engine", "observatory", "library"]) {
       expect(app).toContain(`id: "${scene}"`);
     }
-    expect(app).toContain("accessible-nav");
+    expect(app).toContain('id="room-index"');
+    expect(app).toContain('aria-label="Open accessible room index"');
+  });
+
+  it("keeps the finished rooms diegetic and independent of raster backgrounds", () => {
+    const app = projectFile("src/SpatialApp.tsx");
+    const scenes = projectFile("src/components/scenes/DiegeticScenes.tsx");
+    expect(app).toContain('<SceneShell scene="hall"');
+    expect(app).toContain('<SceneShell scene="workshop"');
+    expect(app).toContain('<SceneShell scene="engine"');
+    expect(app).toContain("<CoreReactor");
+    expect(scenes).not.toMatch(/<img|\.webp|assets\/world/i);
   });
 
   it("keeps the required independent-project and experimental warnings visible", () => {

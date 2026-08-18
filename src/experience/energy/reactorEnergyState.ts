@@ -24,10 +24,10 @@ export function deriveReactorEnergyState(
     mode: syncing ? "syncing" : stable ? "stable" : "dormant",
     coreActive,
     networkFlowActive: coreActive && visualState.networkActive === true,
-    blueIntensity: syncing ? 1.28 : stable ? 0.98 : 0.035,
-    flowRate: syncing ? 0.3 : stable ? 0.085 : 0.002,
-    turbulence: syncing ? 0.16 + (1 - progress) * 0.18 : stable ? 0.045 : 0.015,
-    goldBaseline: stable ? 0.018 : 0,
+    blueIntensity: syncing ? 1.22 : stable ? 1.02 : 0.028,
+    flowRate: syncing ? 0.24 : stable ? 0.072 : 0,
+    turbulence: syncing ? 0.12 + (1 - progress) * 0.12 : stable ? 0.035 : 0.01,
+    goldBaseline: 0,
   };
 }
 

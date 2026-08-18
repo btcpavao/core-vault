@@ -127,6 +127,10 @@ function AuthoredCoreReactorModel({
         material.emissiveIntensity = 0.025;
         material.metalness = 0.12;
         material.roughness = 0.26;
+        material.transparent = true;
+        material.opacity = 0.12;
+        material.depthWrite = false;
+        material.toneMapped = false;
         animatedMaterials.push(material);
       }
       return material;
@@ -142,7 +146,7 @@ function AuthoredCoreReactorModel({
       const glass = materials.some((material) => material.name.includes("Technical_Glass"));
       mesh.castShadow = !glass;
       mesh.receiveShadow = !glass;
-      if (glass) mesh.renderOrder = 2;
+      if (glass) mesh.renderOrder = 3;
     });
 
     return {
@@ -171,12 +175,13 @@ function AuthoredCoreReactorModel({
 
   useFrame(({ clock }) => {
     const cadence = energyState.mode === "syncing" ? 1.35 : 0.48;
-    const breathing = reducedMotion ? 0 : Math.sin(clock.elapsedTime * cadence) * 0.08;
+    const breathing = reducedMotion ? 0 : Math.sin(clock.elapsedTime * cadence) * 0.07;
     const intensity = energyState.coreActive
-      ? 0.4 + energyState.blueIntensity * 0.78 + breathing
+      ? 0.56 + energyState.blueIntensity * 1.02 + breathing
       : 0.025;
     energyMaterials.forEach((material) => {
       material.emissiveIntensity = intensity;
+      material.opacity = energyState.coreActive ? 0.58 : 0.12;
     });
   });
 

@@ -534,17 +534,17 @@ Required:
 
 ---
 
-# 33. Phase 3 — Real-Time Experience Foundation
+# 33. Phase 3 — Historical Real-Time Experience Foundation
 
 ## Goal
 
-Introduce the renderer without attempting to build the entire world.
+Record the real-time renderer foundation that was implemented to test the original architecture. Sections 34–44 describe completed experimental work and are retained as history; they are not a mandate for future rooms.
 
 ---
 
 # 34. Add Rendering Stack
 
-Preferred initial implementation:
+The historical initial implementation used:
 
 - Three.js
 - React Three Fiber
@@ -687,7 +687,7 @@ Aim for:
 
 # 44. Phase 3 Exit Gate
 
-The renderer is accepted only when:
+The historical renderer gate required:
 
 - real 3D geometry is visible
 - camera occupies real space
@@ -700,11 +700,11 @@ The renderer is accepted only when:
 
 ---
 
-# 45. Phase 4 — Engine Room Proof of Architecture
+# 45. Phase 4 — Historical Engine Room Full-3D Proof
 
 ## Goal
 
-Build the first complete vertical slice.
+Record the first complete full-3D vertical slice. This work proved technical viability and supplied the evidence for the current renderer decision.
 
 The Engine Room is chosen because it combines:
 
@@ -853,9 +853,49 @@ After Engine Room prototype, explicitly evaluate:
 - accessibility
 - development complexity
 
-Only now decide whether the rendering architecture is sufficient.
+The gate has now been reviewed. The result is:
 
-Do not decide based only on theory.
+- the Bitcoin/domain boundary, Visual State Adapter, semantic interaction, accessibility bridge, packaging, and runtime performance are viable;
+- requiring complete real-time 3D geometry for every room is not an acceptable production-cost or iteration-speed baseline;
+- the product vision remains unchanged;
+- the approved direction is the renderer-neutral **Cinematic 2.5D Scene System** in `RENDERER_DIRECTION_DECISION.md`.
+
+The next work is not continued full-3D polishing and not another greybox.
+
+---
+
+# 54A. Engine Room Cinematic 2.5D Proof of Fidelity
+
+## Goal
+
+Prove the visually risky assumption before any additional room is built.
+
+Required proof:
+
+1. one near-final-fidelity Engine Room master scene;
+2. semantic Reactor interaction;
+3. truthful Core offline state;
+4. truthful syncing state;
+5. truthful ready state;
+6. truthful network-disabled state;
+7. real new-block gold pulse;
+8. contextual NodeStatus panel related spatially to the Reactor;
+9. keyboard accessibility;
+10. Reduced Motion;
+11. acceptable desktop performance;
+12. visual integration with no sticker-like overlays.
+
+The scene package may combine authored layers, depth, semantic masks, lighting/emissive masks, controlled parallax, compositing, shaders, selective real-time geometry, audio, and contextual DOM precision UI. Exact formats remain open until this proof establishes them.
+
+## Exit gate
+
+Do not build Main Hall, Workshop, or another room until the Engine Room proves the new pipeline can reach the approved fidelity.
+
+The decisive acceptance question is:
+
+> **Can a normal screenshot of the running Engine Room approach the approved visual reference while still responding truthfully to Bitcoin Core?**
+
+The proof fails if it resembles background artwork with unrelated software graphics, vector glow, arbitrary hotspots, floating labels, or generic cards.
 
 ---
 
@@ -864,6 +904,8 @@ Do not decide based only on theory.
 ## Goal
 
 Prove that Core Vault feels like one place.
+
+**Blocked until Phase 54A passes human fidelity review.**
 
 ---
 
@@ -2754,22 +2796,19 @@ Only after that audit should the first code-migration task be selected.
 
 # 201. First Recommended Coding Sequence
 
-After audit, the most likely sequence is:
+The audit and full-3D architecture sequence has been completed through its decision gate. The current sequence is:
 
 ```text id="roap31"
-1. Secure/confirm Core adapter boundary
-2. Confirm Regtest integration tests
-3. Add real-time experience shell
-4. Add visual-state adapter
-5. Build Engine Room greybox
-6. Connect real Core state
-7. Validate architecture
-8. Build Main Hall
-9. Build Workshop
-10. Complete Personal Vault vertical slice
+1. Preserve the proven Core adapter and Visual State Adapter boundaries
+2. Build one near-final Engine Room cinematic 2.5D master scene
+3. Integrate semantic Reactor states and contextual NodeStatus UI
+4. Validate offline, syncing, ready, network-disabled, and real new-block states
+5. Validate keyboard access, Reduced Motion, performance, and screenshot fidelity
+6. Pass the Engine Room human-review gate
+7. Only then plan Main Hall or Workshop
 ```
 
-Do not skip from step 1 directly to final photorealistic rooms.
+Do not begin another room before the Engine Room fidelity gate passes.
 
 ---
 
@@ -2779,7 +2818,7 @@ Engine Room is the strongest architectural proof because it requires:
 
 - real Core data
 - state mapping
-- 3D rendering
+- renderer-neutral scene compositing with selective real-time rendering where useful
 - motion
 - object interaction
 - contextual UI
@@ -2913,12 +2952,11 @@ Legacy UI may still dominate.
 
 Contains:
 
-- R3F
-- Engine Room
+- the historical R3F Engine Room proof
 - real Core visual state
 - DOM precision panel
 
-This milestone determines whether the concept is technically viable.
+This milestone proved technical viability and produced the renderer-direction decision. The active next milestone is the Engine Room cinematic 2.5D Proof of Fidelity.
 
 ---
 

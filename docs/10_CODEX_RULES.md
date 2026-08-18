@@ -833,15 +833,13 @@ Then expand.
 
 ---
 
-# 55. Engine Room Is the Preferred Architecture Proof
+# 55. Engine Room Is the Required Fidelity Proof
 
-If the project has not yet validated the real-time architecture:
-
-build Engine Room first or justify another choice.
+The full-3D Engine Room already validated technical architecture. The current required proof is the cinematic 2.5D Engine Room at near-final fidelity.
 
 It proves:
 
-- 3D
+- coherent semantic scene rendering
 - Core state
 - animation
 - semantic mapping
@@ -849,24 +847,19 @@ It proves:
 
 ---
 
-# 56. Greybox Before Final Art
+# 56. Prove the Highest-Risk Assumption First
 
-For every new room:
+For geometry-heavy rooms whose interaction and composition are unproven, use a blockout before expensive modelling. For the current Engine Room task, greybox, interaction, domain integration, and runtime architecture are already proven; the unresolved risk is fidelity, so begin with one near-final master scene.
 
 ```text
-functional requirements
-→ spatial blockout
-→ interaction
-→ camera
-→ domain integration
-→ usability
-→ final modelling
-→ materials
-→ lighting
-→ polish
+identify current evidence
+→ identify highest-risk assumption
+→ build the narrowest proof at the fidelity needed to test it
+→ validate truth, accessibility, performance, and visual integration
+→ pass the relevant human-review gate
 ```
 
-Do not reverse this order.
+Do not repeat a lower-fidelity proof that cannot answer the active risk.
 
 ---
 
@@ -884,7 +877,7 @@ are validated.
 
 ---
 
-# 58. No Flat Article Art as Final Runtime World
+# 58. No Reference Art as Wallpaper
 
 Reference artwork may guide:
 
@@ -893,7 +886,7 @@ Reference artwork may guide:
 - composition
 - lighting
 
-It must not simply become application background.
+It must not simply become application background. Original authored imagery may become part of a final semantic scene package when it is function-specific, locally stored, sufficiently resolved, and integrated through depth, masks, state layers, light response, interaction, and contextual UI.
 
 ---
 
@@ -905,15 +898,27 @@ do not copy it into production unless explicitly instructed.
 
 ---
 
-# 60. World Must Be Real-Time Spatial
+# 60. World Must Be an Integrated Semantic Scene
 
-Do not regress to:
+Reject:
 
 - background image
 - HTML card layer
 - vector animation overlay
 
 as the primary world.
+
+Allow:
+
+- a high-fidelity authored master scene;
+- semantic object, state, lighting, and emissive masks;
+- coherent foreground, mid-ground, and background layers;
+- depth and controlled parallax;
+- state-driven compositing and selective real-time effects;
+- selective Three.js/R3F/GLB geometry where useful;
+- contextual precision UI related to the selected object.
+
+Never interpret 2.5D as permission to rebuild the old DOM/CSS spatial prototype. Every visible element must belong to one material, lighting, perspective, atmospheric, and compositional system.
 
 ---
 
@@ -937,12 +942,13 @@ It is not the primary room-rendering system.
 
 A room contains:
 
-- geometry
-- camera
-- lights
+- an authored master composition
+- depth and viewpoint rules
+- integrated lighting/compositing
 - semantic objects
-- materials
+- coherent materials
 - state-driven animation
+- optional selective geometry and shaders
 
 The scene itself performs interface work.
 
@@ -999,7 +1005,7 @@ Engine Room's broad status must be readable from the Reactor/environment before 
 
 Observatory is a contemplative data-driven environment.
 
-It is not a set of charts pasted into 3D.
+It is not a set of charts pasted into a scenic composition.
 
 ---
 
@@ -1068,15 +1074,18 @@ Interactions should generally be deterministic.
 
 ---
 
-# 73. Three.js Direction
+# 73. Renderer-Neutral Direction
 
-Current preferred real-time rendering direction is:
+The approved Experience System may reuse:
 
 - Three.js
 - React Three Fiber
 - TypeScript
+- layered 2D/2.5D compositing
+- Canvas, CSS, and DOM where appropriate
+- selective shaders and GLB assets
 
-Do not silently migrate to:
+None is mandatory for every room. Choose the simplest local, auditable rendering architecture that can reach the approved experience and fidelity. Do not silently migrate to:
 
 - Unity
 - Unreal
@@ -1179,10 +1188,12 @@ Core Vault requires original expression.
 
 Maintain clear structure for:
 
-- source Blender assets
-- runtime GLB
+- authored source scenes and Blender assets
+- runtime scene packages and selective GLB
 - source textures
 - optimized textures
+- depth, semantic, lighting, and emissive masks
+- scene metadata and interaction maps
 - concept references
 
 ---
@@ -1198,13 +1209,13 @@ Mesh42
 
 for application behavior.
 
-Use semantic node names.
+Use semantic layer, mask, metadata, shader-input, or node names as appropriate to the renderer.
 
 ---
 
 # 83. Art Replacement Must Not Break Bitcoin Logic
 
-A new Reactor model should plug into the same visual semantic contract.
+A new Reactor scene representation should plug into the same visual semantic contract.
 
 A new Key model should not require changing signing code.
 
@@ -2426,7 +2437,7 @@ for major systems.
 Document existing presentation that conflicts with:
 
 - world-as-interface
-- real-time renderer
+- the approved renderer-neutral Experience System
 - diegetic object interaction
 
 Do not immediately delete it.
@@ -2485,13 +2496,13 @@ Ask when there is a genuine product choice or destructive ambiguity.
 
 # 189. Do Not Ask User to Choose Low-Level Technology Arbitrarily
 
-The foundational architecture already gives direction.
+The foundational architecture already gives renderer-neutral direction.
 
 Do not ask:
 
-> Three.js or React Three Fiber?
+> Three.js, React Three Fiber, or Canvas?
 
-when documentation already specifies the preferred architecture.
+when the task can instead prove the smallest suitable combination against the semantic scene contract.
 
 ---
 
@@ -2509,7 +2520,7 @@ Examples worth asking about:
 
 # 191. Do Not Pretend Something Is Impossible Without Testing
 
-If uncertain whether R3F can achieve a visual/interaction requirement:
+If uncertain whether the proposed renderer/compositor can achieve a visual or interaction requirement:
 
 build a narrow proof.
 

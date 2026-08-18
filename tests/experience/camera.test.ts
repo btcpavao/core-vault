@@ -3,6 +3,9 @@ import {
   cameraPoseForFocus,
   cameraTransitionPolicy,
   ENGINE_ROOM_CAMERA_POSES,
+  ER09_PRODUCTION_CAMERA_POSES,
+  productionCameraPoseForFocus,
+  productionReviewViewFromSearch,
 } from "../../src/experience/camera/engineRoomCamera";
 
 describe("Engine Room curated camera", () => {
@@ -22,5 +25,22 @@ describe("Engine Room curated camera", () => {
   it("makes Reduced Motion deterministic and immediate", () => {
     expect(cameraTransitionPolicy(true)).toBe("immediate");
     expect(cameraTransitionPolicy(false)).toBe("damped");
+  });
+
+  it("preserves the converted 38 mm Blender hero camera contract", () => {
+    expect(ER09_PRODUCTION_CAMERA_POSES.hero).toMatchObject({
+      position: [-0.25, 2.2, 13.25],
+      target: [0.1, 1.85, -1.8],
+      fov: 34.5,
+    });
+    expect(productionCameraPoseForFocus("reactor").name).toBe("ProductionReactor");
+    expect(productionCameraPoseForFocus("network-console").name).toBe("ProductionConsole");
+  });
+
+  it("allows review-camera overrides only in development", () => {
+    expect(productionReviewViewFromSearch(true, "?er09View=alternate")).toBe("alternate");
+    expect(productionReviewViewFromSearch(true, "?er09View=exterior")).toBe("exterior");
+    expect(productionReviewViewFromSearch(false, "?er09View=alternate")).toBeNull();
+    expect(productionReviewViewFromSearch(true, "?er09View=free")).toBeNull();
   });
 });

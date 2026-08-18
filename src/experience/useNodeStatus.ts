@@ -8,10 +8,12 @@ export interface NodeStatusReadState {
   message: string | null;
 }
 
-const qaCookiePath = import.meta.env.DEV
+const qaRuntimeEnabled =
+  import.meta.env.DEV || import.meta.env.VITE_CV_ER10B_QA === "1";
+const qaCookiePath = qaRuntimeEnabled
   ? import.meta.env.VITE_CORE_QA_COOKIE_PATH
   : undefined;
-const qaPort = import.meta.env.DEV
+const qaPort = qaRuntimeEnabled
   ? Number(import.meta.env.VITE_CORE_QA_PORT)
   : Number.NaN;
 const QA_CONNECTION_SETTINGS: ConnectionSettings | null =

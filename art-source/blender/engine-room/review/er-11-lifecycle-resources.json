@@ -1,0 +1,52 @@
+{
+  "gate": "ER-11",
+  "artifactSha256": "d4fffdf74d6564540e63e8263df174d36279916356667c7ed68241a225cf93bf",
+  "tenCycleRun": {
+    "status": "complete",
+    "records": 22,
+    "cycles": 10,
+    "resourceRanges": {
+      "geometries": {"min": 63, "max": 67, "final": 67},
+      "textures": {"min": 3, "max": 5, "final": 5},
+      "programs": {"min": 4, "max": 10, "final": 10}
+    },
+    "counters": {
+      "productionMounts": 12,
+      "productionUnmounts": 11,
+      "runtimeScenesBuilt": 12,
+      "consoleSurfacesCreated": 12,
+      "consoleTexturesDisposed": 11,
+      "runtimeGeometriesDisposed": 11,
+      "runtimeMaterialsDisposed": 528,
+      "environmentMounts": 1,
+      "environmentUnmounts": 0,
+      "lightProbeMounts": 1,
+      "lightProbeUnmounts": 0
+    },
+    "classification": "The GLTF cache remains intentionally resident. Per-entry runtime geometry/material/CanvasTexture ownership is paired. Canvas-owned Environment and SH LightProbe remain singletons across ordinary room re-entry. No monotonic renderer resource growth."
+  },
+  "legacyAudit": {
+    "legacySelected": {"geometries":3,"textures":1,"programs":1,"productionUnmounts":1,"environmentUnmounts":1,"lightProbeUnmounts":1},
+    "onlySelectedSceneActive": true,
+    "productionReturn": "visually restored; transient renderer.info values were observed during environment recapture, so repeated legacy/production A/B switching remains a diagnostic-only risk, not the production room re-entry path"
+  },
+  "offlineReconnect": {
+    "cycles": 3,
+    "sequence": ["online@101","offline","online@101","offline","online@101","offline","online@101"],
+    "sceneRebuilds": 0,
+    "truthfulDormantState": true
+  },
+  "realBlocks": {
+    "startHeight": 101,
+    "endHeight": 104,
+    "realBlocksGenerated": 3,
+    "pulseSerialsObserved": [1,2,3],
+    "duplicateSubscriptionsObserved": false
+  },
+  "visibility": {
+    "backgroundRafDeltaExcludedBySampler": true,
+    "nonQaFrameloopPolicy": "always only while visible, otherwise never",
+    "duplicateAnimationLoopObserved": false,
+    "persistentResumeSpikeObserved": false
+  }
+}
