@@ -47,7 +47,7 @@ pub async fn list_vaults(
             "listwalletdir",
             json!({}),
             None,
-            "Čita wallete iz lokalnog Bitcoin Core wallet direktorija.",
+            "Reads wallets from the local Bitcoin Core wallet directory.",
             None,
             false,
             &mut traces,
@@ -58,7 +58,7 @@ pub async fn list_vaults(
             "listwallets",
             json!({}),
             None,
-            "Čita trenutno učitane Core wallete.",
+            "Reads the currently loaded Core wallets.",
             None,
             false,
             &mut traces,
@@ -73,7 +73,7 @@ pub async fn list_vaults(
     let backed_up = state
         .backed_up_wallets
         .lock()
-        .map_err(|_| "Backup status nije dostupan.".to_string())?
+        .map_err(|_| "Backup status is unavailable.".to_string())?
         .clone();
     let names = wallet_dir
         .get("wallets")
@@ -111,7 +111,7 @@ pub async fn list_vaults(
                 "getwalletinfo",
                 json!({}),
                 Some(&name),
-                "Provjerava tip, zaključavanje i ulogu Core walleta.",
+                "Checks the Core wallet type, lock state, and role.",
                 None,
                 false,
                 &mut traces,
@@ -122,7 +122,7 @@ pub async fn list_vaults(
                 "getbalances",
                 json!({}),
                 Some(&name),
-                "Čita stanje isključivo iz lokalnog Corea.",
+                "Reads the balance only from the local Core instance.",
                 None,
                 false,
                 &mut traces,
@@ -207,7 +207,7 @@ pub async fn create_personal_vault(
                 "external_signer": false
             }),
             None,
-            "Bitcoin Core stvara i odmah šifrira descriptor wallet.",
+            "Bitcoin Core creates and immediately encrypts a descriptor wallet.",
             Some(json!({
                 "wallet_name": wallet_name,
                 "disable_private_keys": false,
@@ -232,7 +232,7 @@ pub async fn create_personal_vault(
     .await?;
     if !vault.encrypted || !vault.locked {
         return Err(
-            "STOP: Bitcoin Core nije potvrdio šifrirani i zaključani Personal Vault.".into(),
+            "STOP: Bitcoin Core did not confirm an encrypted and locked Personal Vault.".into(),
         );
     }
     Ok(Operation {
@@ -263,7 +263,7 @@ pub async fn get_personal_vault(
             "listtransactions",
             json!({ "label": "*", "count": 12, "skip": 0, "include_watchonly": true }),
             Some(&wallet_name),
-            "Čita posljednje aktivnosti iz lokalnog Core walleta.",
+            "Reads recent activity from the local Core wallet.",
             None,
             false,
             &mut traces,
@@ -296,17 +296,16 @@ pub async fn backup_personal_vault(
             "backupwallet",
             json!({ "destination": destination_display }),
             Some(&wallet_name),
-            "Bitcoin Core izrađuje stvarni wallet backup na odabranoj lokalnoj lokaciji.",
+            "Bitcoin Core creates a real wallet backup at the selected local location.",
             None,
             false,
             &mut traces,
         )
         .await?;
-    let metadata = fs::metadata(&destination).map_err(|_| {
-        "Bitcoin Core je odgovorio, ali backup datoteka nije pronađena.".to_string()
-    })?;
+    let metadata = fs::metadata(&destination)
+        .map_err(|_| "Bitcoin Core responded, but the backup file was not found.".to_string())?;
     if !metadata.is_file() || metadata.len() == 0 {
-        return Err("STOP: backup nije neprazna lokalna datoteka.".into());
+        return Err("STOP: The backup is not a non-empty local file.".into());
     }
     let receipt = BackupReceipt {
         wallet_name: wallet_name.clone(),
@@ -318,7 +317,7 @@ pub async fn backup_personal_vault(
     state
         .backed_up_wallets
         .lock()
-        .map_err(|_| "Backup status nije dostupan.".to_string())?
+        .map_err(|_| "Backup status is unavailable.".to_string())?
         .insert(wallet_name, receipt.clone());
     Ok(Operation {
         data: receipt,
@@ -336,7 +335,7 @@ pub async fn restore_personal_vault(
     validate_wallet_name(&original_wallet_name)?;
     validate_wallet_name(&restored_wallet_name)?;
     if original_wallet_name == restored_wallet_name {
-        return Err("Testni restore mora koristiti novo, jedinstveno wallet ime.".into());
+        return Err("A test restore must use a new, unique wallet name.".into());
     }
     let backup_file =
         consume_file_capability(state, &capability_id, FileOperation::PersonalRestoreSource)?;
@@ -354,7 +353,7 @@ pub async fn restore_personal_vault(
                 "load_on_startup": false
             }),
             None,
-            "Bitcoin Core vraća testnu kopiju iz odabranog wallet backupa.",
+            "Bitcoin Core restores a test copy from the selected wallet backup.",
             None,
             false,
             &mut traces,
@@ -393,7 +392,7 @@ pub async fn unload_wallet(
             "unloadwallet",
             json!({ "wallet_name": wallet_name, "load_on_startup": false }),
             None,
-            "Bitcoin Core zatvara testno vraćeni wallet bez brisanja njegove datoteke.",
+            "Bitcoin Core unloads the test-restored wallet without deleting its file.",
             None,
             false,
             &mut traces,
@@ -412,7 +411,7 @@ pub async fn create_receive_address(
 ) -> Result<Operation<PersonalReceive>, String> {
     validate_wallet_name(&wallet_name)?;
     if label.chars().any(char::is_control) || label.chars().count() > 80 {
-        return Err("Label adrese nije valjan.".into());
+        return Err("The address label is invalid.".into());
     }
     let mut traces = Vec::new();
     let network = ensure_test_chain(&client, &mut traces).await?;
@@ -429,14 +428,14 @@ pub async fn create_receive_address(
         .await?
         .as_str()
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Bitcoin Core nije vratio receiving adresu.".to_string())?
+        .ok_or_else(|| "Bitcoin Core did not return a receiving address.".to_string())?
         .to_string();
     let info = client
         .call(
             "getaddressinfo",
             json!({ "address": address }),
             Some(&wallet_name),
-            "Potvrđuje da nova adresa pripada ovom Core walletu.",
+            "Confirms that the new address belongs to this Core wallet.",
             None,
             false,
             &mut traces,
@@ -444,7 +443,10 @@ pub async fn create_receive_address(
         .await?;
     let wallet_owned = info.get("ismine").and_then(Value::as_bool) == Some(true);
     if !wallet_owned {
-        return Err("STOP: Bitcoin Core nije potvrdio da receiving adresa pripada walletu.".into());
+        return Err(
+            "STOP: Bitcoin Core did not confirm that the receiving address belongs to the wallet."
+                .into(),
+        );
     }
     Ok(Operation {
         data: PersonalReceive {
@@ -468,7 +470,7 @@ pub async fn change_passphrase(
     validate_wallet_name(&wallet_name)?;
     validate_passphrase(&new_passphrase)?;
     if old_passphrase.is_empty() {
-        return Err("Unesite postojeću wallet passphrase.".into());
+        return Err("Enter the existing wallet passphrase.".into());
     }
     let old_passphrase = Zeroizing::new(old_passphrase);
     let new_passphrase = Zeroizing::new(new_passphrase);
@@ -479,7 +481,7 @@ pub async fn change_passphrase(
             "walletpassphrasechange",
             json!({ "oldpassphrase": old_passphrase.as_str(), "newpassphrase": new_passphrase.as_str() }),
             Some(&wallet_name),
-            "Bitcoin Core mijenja passphrase ovog walleta.",
+            "Bitcoin Core changes this wallet's passphrase.",
             Some(json!({ "oldpassphrase": "[REDACTED]", "newpassphrase": "[REDACTED]" })),
             false,
             &mut traces,
@@ -508,14 +510,17 @@ pub async fn create_spend_proposal(
             "validateaddress",
             json!({ "address": destination }),
             None,
-            "Bitcoin Core provjerava punu destination adresu i mrežu.",
+            "Bitcoin Core checks the full destination address and network.",
             None,
             false,
             &mut traces,
         )
         .await?;
     if validated.get("isvalid").and_then(Value::as_bool) != Some(true) {
-        return Err("Destination nije valjana adresa za povezani Bitcoin Core.".into());
+        return Err(
+            "The destination is not a valid address for the connected Bitcoin Core instance."
+                .into(),
+        );
     }
     let mut output = Map::new();
     let amount_btc = amount_sats as f64 / 100_000_000.0;
@@ -523,7 +528,7 @@ pub async fn create_spend_proposal(
         destination.clone(),
         Value::Number(
             serde_json::Number::from_f64(amount_btc)
-                .ok_or_else(|| "Iznos nije moguće pretvoriti u BTC.".to_string())?,
+                .ok_or_else(|| "Could not convert the amount to BTC.".to_string())?,
         ),
     );
     let funded = client
@@ -544,7 +549,7 @@ pub async fn create_spend_proposal(
                 "version": 2
             }),
             Some(&wallet_name),
-            "Bitcoin Core odabire sredstva, fee i change te izrađuje PSBT bez potpisa.",
+            "Bitcoin Core selects funds, fee, and change, then creates an unsigned PSBT.",
             None,
             true,
             &mut traces,
@@ -554,7 +559,7 @@ pub async fn create_spend_proposal(
         .get("psbt")
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Bitcoin Core nije vratio funded PSBT.".to_string())?
+        .ok_or_else(|| "Bitcoin Core did not return a funded PSBT.".to_string())?
         .to_string();
     let fee_sats = btc_to_sats(funded.get("fee").and_then(Value::as_f64).unwrap_or(0.0));
     let change_position = funded
@@ -566,7 +571,7 @@ pub async fn create_spend_proposal(
             "decodepsbt",
             json!({ "psbt": psbt }),
             None,
-            "Dekodira PSBT kako bi review prikazao svaki output i change.",
+            "Decodes the PSBT so the review can show every output and change.",
             Some(json!({ "psbt": "[REDACTED]" })),
             true,
             &mut traces,
@@ -574,7 +579,7 @@ pub async fn create_spend_proposal(
         .await?;
     let outputs = parse_outputs(&decoded, change_position);
     if outputs.is_empty() {
-        return Err("Bitcoin Core nije vratio pregledive PSBT outpute.".into());
+        return Err("Bitcoin Core did not return reviewable PSBT outputs.".into());
     }
     let draft_id = next_draft_id();
     let spend = PersonalSpendState {
@@ -597,7 +602,7 @@ pub async fn create_spend_proposal(
     state
         .personal_drafts
         .lock()
-        .map_err(|_| "PSBT state nije dostupan.".to_string())?
+        .map_err(|_| "PSBT state is unavailable.".to_string())?
         .insert(draft_id, spend);
     Ok(Operation {
         data: view,
@@ -614,16 +619,16 @@ pub async fn sign_spend_proposal(
     let snapshot = state
         .personal_drafts
         .lock()
-        .map_err(|_| "PSBT state nije dostupan.".to_string())?
+        .map_err(|_| "PSBT state is unavailable.".to_string())?
         .get(&draft_id)
         .cloned()
-        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+        .ok_or_else(|| "The spend proposal is no longer available.".to_string())?;
     let passphrase = Zeroizing::new(passphrase);
     if snapshot.broadcast_in_progress {
-        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+        return Err("A broadcast attempt is already in progress for this transaction.".into());
     }
     if passphrase.is_empty() {
-        return Err("Unesite wallet passphrase za ovaj potpis.".into());
+        return Err("Enter the wallet passphrase for this signature.".into());
     }
     let mut traces = Vec::new();
     ensure_test_chain(&client, &mut traces).await?;
@@ -632,7 +637,7 @@ pub async fn sign_spend_proposal(
             "walletpassphrase",
             json!({ "passphrase": passphrase.as_str(), "timeout": 5 }),
             Some(&snapshot.wallet_name),
-            "Bitcoin Core otključava wallet na najviše pet sekundi.",
+            "Bitcoin Core unlocks the wallet for no more than five seconds.",
             Some(json!({ "passphrase": "[REDACTED]", "timeout": 5 })),
             false,
             &mut traces,
@@ -649,7 +654,7 @@ pub async fn sign_spend_proposal(
                 "finalize": true
             }),
             Some(&snapshot.wallet_name),
-            "Bitcoin Core pregledani PSBT potpisuje ključem iz ovog walleta.",
+            "Bitcoin Core signs the reviewed PSBT with the key from this wallet.",
             Some(json!({ "psbt": "[REDACTED]", "sign": true, "sighashtype": "DEFAULT" })),
             true,
             &mut traces,
@@ -660,33 +665,31 @@ pub async fn sign_spend_proposal(
             "walletlock",
             json!({}),
             Some(&snapshot.wallet_name),
-            "Bitcoin Core odmah ponovno zaključava wallet.",
+            "Bitcoin Core immediately locks the wallet again.",
             None,
             false,
             &mut traces,
         )
         .await;
     if lock_result.is_err() {
-        return Err("STOP: wallet se nakon potpisa nije mogao potvrđeno zaključati.".into());
+        return Err("STOP: The wallet could not be confirmed as locked after signing.".into());
     }
     let processed = processed?;
     let updated_psbt = processed
         .get("psbt")
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Bitcoin Core nije vratio potpisani PSBT.".to_string())?
+        .ok_or_else(|| "Bitcoin Core did not return the signed PSBT.".to_string())?
         .to_string();
     let mut drafts = state
         .personal_drafts
         .lock()
-        .map_err(|_| "PSBT state nije dostupan.".to_string())?;
+        .map_err(|_| "PSBT state is unavailable.".to_string())?;
     let draft = drafts
         .get_mut(&draft_id)
-        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+        .ok_or_else(|| "The spend proposal is no longer available.".to_string())?;
     if draft.psbt != snapshot.psbt || draft.broadcast_in_progress {
-        return Err(
-            "Spend proposal promijenjen je tijekom potpisa. Ponovno ga pregledajte.".into(),
-        );
+        return Err("The spend proposal changed during signing. Review it again.".into());
     }
     draft.psbt = updated_psbt;
     draft.complete = processed
@@ -700,7 +703,7 @@ pub async fn sign_spend_proposal(
     state
         .broadcast_authorizations
         .lock()
-        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .map_err(|_| "Broadcast authorizations are currently unavailable.".to_string())?
         .revoke_draft(&view.draft_id);
     Ok(Operation {
         data: view,
@@ -716,15 +719,15 @@ pub async fn finalize_spend_proposal(
     let snapshot = state
         .personal_drafts
         .lock()
-        .map_err(|_| "PSBT state nije dostupan.".to_string())?
+        .map_err(|_| "PSBT state is unavailable.".to_string())?
         .get(&draft_id)
         .cloned()
-        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+        .ok_or_else(|| "The spend proposal is no longer available.".to_string())?;
     if !snapshot.complete {
-        return Err("PSBT još nema potpune potpise i ne može se finalizirati.".into());
+        return Err("The PSBT does not have enough signatures and cannot be finalized.".into());
     }
     if snapshot.broadcast_in_progress {
-        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+        return Err("A broadcast attempt is already in progress for this transaction.".into());
     }
     let mut traces = Vec::new();
     ensure_test_chain(&client, &mut traces).await?;
@@ -733,32 +736,30 @@ pub async fn finalize_spend_proposal(
             "finalizepsbt",
             json!({ "psbt": snapshot.psbt, "extract": true }),
             None,
-            "Bitcoin Core finalizira potpisani PSBT, ali ga još ne broadcasta.",
+            "Bitcoin Core finalizes the signed PSBT but does not broadcast it yet.",
             Some(json!({ "psbt": "[REDACTED]", "extract": true })),
             true,
             &mut traces,
         )
         .await?;
     if finalized.get("complete").and_then(Value::as_bool) != Some(true) {
-        return Err("Bitcoin Core nije potvrdio da je PSBT potpun.".into());
+        return Err("Bitcoin Core did not confirm that the PSBT is complete.".into());
     }
     let raw_hex = finalized
         .get("hex")
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Bitcoin Core nije vratio finalni transaction hex.".to_string())?
+        .ok_or_else(|| "Bitcoin Core did not return the final transaction hex.".to_string())?
         .to_string();
     let mut drafts = state
         .personal_drafts
         .lock()
-        .map_err(|_| "PSBT state nije dostupan.".to_string())?;
+        .map_err(|_| "PSBT state is unavailable.".to_string())?;
     let draft = drafts
         .get_mut(&draft_id)
-        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+        .ok_or_else(|| "The spend proposal is no longer available.".to_string())?;
     if draft.psbt != snapshot.psbt || draft.broadcast_in_progress {
-        return Err(
-            "Spend proposal promijenjen je tijekom finalizacije. Ponovno ga pregledajte.".into(),
-        );
+        return Err("The spend proposal changed during finalization. Review it again.".into());
     }
     draft.raw_hex = Some(raw_hex);
     draft.mempool_preflight = MempoolPreflight::NotRun;
@@ -767,7 +768,7 @@ pub async fn finalize_spend_proposal(
     state
         .broadcast_authorizations
         .lock()
-        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .map_err(|_| "Broadcast authorizations are currently unavailable.".to_string())?
         .revoke_draft(&view.draft_id);
     Ok(Operation {
         data: view,
@@ -783,16 +784,16 @@ pub async fn preflight_spend_proposal(
     let snapshot = state
         .personal_drafts
         .lock()
-        .map_err(|_| "PSBT state nije dostupan.".to_string())?
+        .map_err(|_| "PSBT state is unavailable.".to_string())?
         .get(&draft_id)
         .cloned()
-        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+        .ok_or_else(|| "The spend proposal is no longer available.".to_string())?;
     let raw_hex = snapshot
         .raw_hex
         .clone()
-        .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
+        .ok_or_else(|| "The transaction has not been finalized yet.".to_string())?;
     if snapshot.broadcast_in_progress {
-        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+        return Err("A broadcast attempt is already in progress for this transaction.".into());
     }
     let transaction_identity = finalized_transaction_identity(&raw_hex);
     let mut traces = Vec::new();
@@ -803,7 +804,7 @@ pub async fn preflight_spend_proposal(
                 "testmempoolaccept",
                 json!({ "rawtxs": [raw_hex] }),
                 None,
-                "Lokalni Core provjerava mempool pravila bez slanja transakcije.",
+                "The local Core instance checks mempool rules without sending the transaction.",
                 Some(json!({ "rawtxs": ["[REDACTED]"] })),
                 true,
                 &mut traces,
@@ -813,27 +814,29 @@ pub async fn preflight_spend_proposal(
             Ok(tested) => parse_mempool_preflight(tested, transaction_identity.clone()),
             Err(_) => MempoolPreflight::Indeterminate {
                 transaction_identity: transaction_identity.clone(),
-                reason: "Core Vault nije mogao dobiti pouzdan testmempoolaccept rezultat. Pokušajte ponovno."
-                    .into(),
+                reason:
+                    "Core Vault could not obtain a reliable testmempoolaccept result. Try again."
+                        .into(),
             },
         },
         Err(_) => MempoolPreflight::Indeterminate {
             transaction_identity: transaction_identity.clone(),
-            reason: "Core Vault nije mogao potvrditi mrežu lokalnog Bitcoin Corea za mempool provjeru."
-                .into(),
+            reason:
+                "Core Vault could not confirm the local Bitcoin Core network for the mempool check."
+                    .into(),
         },
     };
 
     let mut drafts = state
         .personal_drafts
         .lock()
-        .map_err(|_| "PSBT state nije dostupan.".to_string())?;
+        .map_err(|_| "PSBT state is unavailable.".to_string())?;
     let draft = drafts
         .get_mut(&draft_id)
-        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+        .ok_or_else(|| "The spend proposal is no longer available.".to_string())?;
     if draft.raw_hex.as_deref() != Some(raw_hex.as_str()) || draft.broadcast_in_progress {
         return Err(
-            "Finalizirana transakcija promijenjena je tijekom mempool provjere. Pokrenite provjeru ponovno."
+            "The finalized transaction changed during the mempool check. Run the check again."
                 .into(),
         );
     }
@@ -843,7 +846,7 @@ pub async fn preflight_spend_proposal(
     state
         .broadcast_authorizations
         .lock()
-        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .map_err(|_| "Broadcast authorizations are currently unavailable.".to_string())?
         .revoke_draft(&view.draft_id);
     Ok(Operation {
         data: view,
@@ -866,10 +869,10 @@ pub fn prepare_personal_broadcast_authorization(
     let drafts = state
         .personal_drafts
         .lock()
-        .map_err(|_| "PSBT state nije dostupan.".to_string())?;
+        .map_err(|_| "PSBT state is unavailable.".to_string())?;
     let draft = drafts
         .get(draft_id)
-        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+        .ok_or_else(|| "The spend proposal is no longer available.".to_string())?;
     let (_, transaction_identity) = ensure_personal_ready_for_broadcast(draft)?;
     Ok(PreparedPersonalBroadcastAuthorization {
         draft_id: draft_id.into(),
@@ -896,23 +899,23 @@ pub fn complete_personal_broadcast_authorization(
     let drafts = state
         .personal_drafts
         .lock()
-        .map_err(|_| "PSBT state nije dostupan.".to_string())?;
+        .map_err(|_| "PSBT state is unavailable.".to_string())?;
     let draft = drafts
         .get(&prepared.draft_id)
-        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+        .ok_or_else(|| "The spend proposal is no longer available.".to_string())?;
     let (_, current_identity) = ensure_personal_ready_for_broadcast(draft)?;
     if current_identity != prepared.transaction_identity
         || draft.preflight_version != prepared.preflight_version
     {
         return Err(
-            "Transakcija ili njezina mempool provjera promijenila se tijekom potvrde. Ponovno pregledajte i potvrdite broadcast."
+            "The transaction or its mempool check changed during confirmation. Review and confirm the broadcast again."
                 .into(),
         );
     }
     let grant = state
         .broadcast_authorizations
         .lock()
-        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .map_err(|_| "Broadcast authorizations are currently unavailable.".to_string())?
         .issue(
             BroadcastPurpose::PersonalTransaction,
             prepared.draft_id,
@@ -942,15 +945,15 @@ pub async fn broadcast_spend_proposal(
     let snapshot = state
         .personal_drafts
         .lock()
-        .map_err(|_| "PSBT state nije dostupan.".to_string())?
+        .map_err(|_| "PSBT state is unavailable.".to_string())?
         .get(&draft_id)
         .cloned()
-        .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+        .ok_or_else(|| "The spend proposal is no longer available.".to_string())?;
     let (_, transaction_identity) = ensure_personal_ready_for_broadcast(&snapshot)?;
     state
         .broadcast_authorizations
         .lock()
-        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .map_err(|_| "Broadcast authorizations are currently unavailable.".to_string())?
         .consume(
             &authorization_id,
             BroadcastPurpose::PersonalTransaction,
@@ -962,16 +965,16 @@ pub async fn broadcast_spend_proposal(
         let mut drafts = state
             .personal_drafts
             .lock()
-            .map_err(|_| "PSBT state nije dostupan.".to_string())?;
+            .map_err(|_| "PSBT state is unavailable.".to_string())?;
         let draft = drafts
             .get_mut(&draft_id)
-            .ok_or_else(|| "Spend proposal više nije dostupan.".to_string())?;
+            .ok_or_else(|| "The spend proposal is no longer available.".to_string())?;
         let (_, current_identity) = ensure_personal_ready_for_broadcast(draft)?;
         if current_identity != transaction_identity
             || draft.preflight_version != snapshot.preflight_version
         {
             return Err(
-                "Transakcija ili preflight promijenili su se prije broadcasta. Autorizacija je potrošena."
+                "The transaction or preflight changed before broadcast. The authorization has been consumed."
                     .into(),
             );
         }
@@ -981,7 +984,7 @@ pub async fn broadcast_spend_proposal(
     let raw_hex = snapshot
         .raw_hex
         .as_deref()
-        .ok_or_else(|| "Transakcija više nije finalizirana.".to_string())?;
+        .ok_or_else(|| "The transaction is no longer finalized.".to_string())?;
     let mut traces = Vec::new();
     let attempt = async {
         ensure_test_chain(&client, &mut traces).await?;
@@ -990,7 +993,7 @@ pub async fn broadcast_spend_proposal(
                 "getnetworkinfo",
                 json!({}),
                 None,
-                "Provjerava da je Bitcoin Core P2P mrežna aktivnost dostupna prije broadcasta.",
+                "Checks that Bitcoin Core P2P network activity is available before broadcast.",
                 None,
                 false,
                 &mut traces,
@@ -998,7 +1001,7 @@ pub async fn broadcast_spend_proposal(
             .await?;
         if network.get("networkactive").and_then(Value::as_bool) != Some(true) {
             return Err(
-                "Broadcast je onemogućen dok je Bitcoin Core network activity disabled. Autorizacija je potrošena."
+                "Broadcast is disabled while Bitcoin Core network activity is disabled. The authorization has been consumed."
                     .into(),
             );
         }
@@ -1016,7 +1019,7 @@ pub async fn broadcast_spend_proposal(
             .as_str()
             .filter(|value| is_txid(value))
             .map(str::to_string)
-            .ok_or_else(|| "Bitcoin Core nije vratio valjani txid.".to_string())
+            .ok_or_else(|| "Bitcoin Core did not return a valid txid.".to_string())
     }
     .await;
 
@@ -1025,12 +1028,12 @@ pub async fn broadcast_spend_proposal(
             state
                 .personal_drafts
                 .lock()
-                .map_err(|_| "PSBT state nije dostupan.".to_string())?
+                .map_err(|_| "PSBT state is unavailable.".to_string())?
                 .remove(&draft_id);
             state
                 .broadcast_authorizations
                 .lock()
-                .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+                .map_err(|_| "Broadcast authorizations are currently unavailable.".to_string())?
                 .revoke_draft(&draft_id);
             Ok(Operation {
                 data: PersonalBroadcast {
@@ -1058,15 +1061,15 @@ fn ensure_personal_ready_for_broadcast(
     draft: &PersonalSpendState,
 ) -> Result<(&str, String), String> {
     if draft.broadcast_in_progress {
-        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+        return Err("A broadcast attempt is already in progress for this transaction.".into());
     }
     if !draft.complete {
-        return Err("PSBT još nema potpune potpise.".into());
+        return Err("The PSBT does not have enough signatures yet.".into());
     }
     let raw_hex = draft
         .raw_hex
         .as_deref()
-        .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
+        .ok_or_else(|| "The transaction has not been finalized yet.".to_string())?;
     ensure_broadcast_preflight(&draft.mempool_preflight, raw_hex)?;
     Ok((raw_hex, finalized_transaction_identity(raw_hex)))
 }
@@ -1084,7 +1087,7 @@ async fn inspect_personal_wallet(
             "getwalletinfo",
             json!({}),
             Some(wallet_name),
-            "Provjerava da je Personal Vault descriptor wallet s privatnim ključevima.",
+            "Checks that the Personal Vault is a descriptor wallet with private keys.",
             None,
             false,
             traces,
@@ -1094,14 +1097,14 @@ async fn inspect_personal_wallet(
     let private_keys_enabled =
         info.get("private_keys_enabled").and_then(Value::as_bool) == Some(true);
     if !descriptors || !private_keys_enabled {
-        return Err("STOP: odabrani wallet nije Personal Vault descriptor wallet.".into());
+        return Err("STOP: The selected wallet is not a Personal Vault descriptor wallet.".into());
     }
     let balances = client
         .call(
             "getbalances",
             json!({}),
             Some(wallet_name),
-            "Čita potvrđeni i nepotvrđeni balance iz lokalnog Corea.",
+            "Reads the confirmed and unconfirmed balance from the local Core instance.",
             None,
             false,
             traces,
@@ -1119,7 +1122,7 @@ async fn inspect_personal_wallet(
     let backup_required = !state
         .backed_up_wallets
         .lock()
-        .map_err(|_| "Backup status nije dostupan.".to_string())?
+        .map_err(|_| "Backup status is unavailable.".to_string())?
         .contains_key(wallet_name);
     Ok(PersonalVault {
         wallet_name: wallet_name.into(),
@@ -1146,7 +1149,7 @@ async fn public_wallet_fingerprint(
             "listdescriptors",
             json!({ "private": false }),
             Some(wallet_name),
-            "Čita samo javne descriptore za stabilni restore fingerprint.",
+            "Reads only public descriptors for a stable restore fingerprint.",
             None,
             false,
             traces,
@@ -1178,7 +1181,7 @@ async fn current_chain(client: &RpcClient, traces: &mut Vec<RpcTrace>) -> Result
             "getblockchaininfo",
             json!({}),
             None,
-            "Čita aktivni chain iz lokalnog Corea.",
+            "Reads the active chain from the local Core instance.",
             None,
             false,
             traces,
@@ -1187,7 +1190,7 @@ async fn current_chain(client: &RpcClient, traces: &mut Vec<RpcTrace>) -> Result
         .get("chain")
         .and_then(Value::as_str)
         .map(str::to_string)
-        .ok_or_else(|| "Bitcoin Core nije vratio aktivni chain.".to_string())
+        .ok_or_else(|| "Bitcoin Core did not return the active chain.".to_string())
 }
 
 fn parse_activity(value: &Value) -> Vec<ActivityItem> {
@@ -1257,14 +1260,14 @@ pub(crate) fn parse_mempool_preflight(
         Err(_) => {
             return MempoolPreflight::Indeterminate {
                 transaction_identity,
-                reason: "Bitcoin Core vratio je neočekivan testmempoolaccept odgovor.".into(),
+                reason: "Bitcoin Core returned an unexpected testmempoolaccept response.".into(),
             }
         }
     };
     if results.len() != 1 {
         return MempoolPreflight::Indeterminate {
             transaction_identity,
-            reason: "Bitcoin Core nije vratio točno jedan rezultat za testiranu transakciju."
+            reason: "Bitcoin Core did not return exactly one result for the tested transaction."
                 .into(),
         };
     }
@@ -1273,14 +1276,15 @@ pub(crate) fn parse_mempool_preflight(
     if !is_txid(&result.txid) || !is_txid(&result.wtxid) {
         return MempoolPreflight::Indeterminate {
             transaction_identity,
-            reason: "Bitcoin Core nije vratio valjani identitet testirane transakcije.".into(),
+            reason: "Bitcoin Core did not return a valid identity for the tested transaction."
+                .into(),
         };
     }
 
     if result.package_error.is_some() {
         return MempoolPreflight::Indeterminate {
             transaction_identity,
-            reason: "Bitcoin Core vratio je neočekivanu package pogrešku za jednu transakciju."
+            reason: "Bitcoin Core returned an unexpected package error for a single transaction."
                 .into(),
         };
     }
@@ -1302,7 +1306,7 @@ pub(crate) fn parse_mempool_preflight(
         },
         None => MempoolPreflight::Indeterminate {
             transaction_identity,
-            reason: "Bitcoin Core nije izričito vratio allowed status za testiranu transakciju."
+            reason: "Bitcoin Core did not explicitly return an allowed status for the tested transaction."
                 .into(),
         },
     }
@@ -1322,20 +1326,20 @@ pub(crate) fn ensure_broadcast_preflight(
             reason,
         } if transaction_identity == &current_identity => Err(format!(
             "Bitcoin Core ne bi prihvatio ovu transakciju u mempool: {}",
-            reason.clone().unwrap_or_else(|| "razlog nije naveden".into())
+            reason.clone().unwrap_or_else(|| "no reason was provided".into())
         )),
         MempoolPreflight::Indeterminate {
             transaction_identity,
             reason,
         } if transaction_identity == &current_identity => Err(format!(
-            "Core Vault nije mogao potvrditi prihvat transakcije u mempool. Broadcast je onemogućen: {reason}"
+            "Core Vault could not confirm that the mempool would accept the transaction. Broadcast is disabled: {reason}"
         )),
         MempoolPreflight::NotRun => Err(
-            "Mempool provjera nije izvršena. Broadcast je onemogućen dok provjera izričito ne uspije."
+            "The mempool check has not run. Broadcast is disabled until the check succeeds explicitly."
                 .into(),
         ),
         _ => Err(
-            "Mempool provjera ne pripada trenutačno finaliziranoj transakciji. Pokrenite provjeru ponovno."
+            "The mempool check does not belong to the currently finalized transaction. Run the check again."
                 .into(),
         ),
     }
@@ -1344,7 +1348,7 @@ pub(crate) fn ensure_broadcast_preflight(
 fn validate_display_name(value: &str) -> Result<(), String> {
     let trimmed = value.trim();
     if trimmed.is_empty() || trimmed.chars().count() > 64 || trimmed.chars().any(char::is_control) {
-        return Err("Naziv vaulta mora imati između 1 i 64 čitljiva znaka.".into());
+        return Err("The vault name must contain between 1 and 64 printable characters.".into());
     }
     Ok(())
 }
@@ -1354,17 +1358,17 @@ fn validate_passphrase(value: &str) -> Result<(), String> {
         return Err("Za prototip koristite wallet passphrase od najmanje 12 znakova.".into());
     }
     if value.chars().any(char::is_control) {
-        return Err("Wallet passphrase sadrži nedopušteni kontrolni znak.".into());
+        return Err("The wallet passphrase contains a forbidden control character.".into());
     }
     Ok(())
 }
 
 fn validate_amount_and_fee(amount_sats: u64, fee_rate_sat_vb: f64) -> Result<(), String> {
     if amount_sats == 0 || amount_sats > 2_100_000_000_000_000 {
-        return Err("Iznos mora biti između 1 sats i ukupne Bitcoin ponude.".into());
+        return Err("The amount must be between 1 sat and the total Bitcoin supply.".into());
     }
     if !(1.0..=1_000.0).contains(&fee_rate_sat_vb) {
-        return Err("Fee rate mora biti između 1 i 1.000 sat/vB.".into());
+        return Err("The fee rate must be between 1 and 1,000 sat/vB.".into());
     }
     Ok(())
 }
@@ -1404,14 +1408,14 @@ fn now_unix() -> u64 {
 }
 
 fn sha256_file(path: &Path) -> Result<String, String> {
-    let mut file =
-        File::open(path).map_err(|_| "Backup nije moguće otvoriti za checksum.".to_string())?;
+    let mut file = File::open(path)
+        .map_err(|_| "Could not open the backup for checksum calculation.".to_string())?;
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 16 * 1024];
     loop {
         let read = file
             .read(&mut buffer)
-            .map_err(|_| "Backup nije moguće pročitati za checksum.".to_string())?;
+            .map_err(|_| "Could not read the backup for checksum calculation.".to_string())?;
         if read == 0 {
             break;
         }
@@ -1576,7 +1580,7 @@ mod tests {
 
     #[test]
     fn broadcast_rejects_no_preflight() {
-        assert_broadcast_is_blocked(MempoolPreflight::NotRun, "Mempool provjera nije izvršena");
+        assert_broadcast_is_blocked(MempoolPreflight::NotRun, "The mempool check has not run");
     }
 
     #[test]
@@ -1597,7 +1601,7 @@ mod tests {
                 transaction_identity: finalized_transaction_identity(TEST_RAW_HEX),
                 reason: "nepouzdan rezultat".into(),
             },
-            "nije mogao potvrditi",
+            "could not confirm",
         );
     }
 
@@ -1607,7 +1611,7 @@ mod tests {
             transaction_identity: finalized_transaction_identity(TEST_RAW_HEX),
         });
         assert!(
-            error.contains("cookie nije moguće pročitati"),
+            error.contains("Could not read the Bitcoin Core cookie"),
             "accepted preflight should pass the gate and reach the Core boundary: {error}"
         );
     }

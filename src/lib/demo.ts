@@ -56,8 +56,8 @@ export const demoCoreStatus: Operation<CoreStatus> = {
     message: "Safe demo data is ready. No Bitcoin Core connection is being simulated as real.",
   },
   rpc: [
-    trace("getblockchaininfo", "Provjerava mrežu lokalnog Bitcoin Corea.", { chain: "signet" }),
-    trace("getnetworkinfo", "Čita verziju lokalnog Bitcoin Corea.", { version: 280000 }),
+    trace("getblockchaininfo", "Checks the local Bitcoin Core network.", { chain: "signet" }),
+    trace("getnetworkinfo", "Reads the local Bitcoin Core version.", { version: 280000 }),
   ],
 };
 
@@ -73,7 +73,7 @@ export const demoSigner = (label: string, encrypted = true, backupPath?: string)
     backupPath: backupPath ?? null,
   },
   rpc: [
-    trace(backupPath ? "backupwallet" : "createwallet", `Bitcoin Core ${backupPath ? "sigurno kopira" : "atomski stvara i šifrira"} ${label}.`, {
+    trace(backupPath ? "backupwallet" : "createwallet", `Bitcoin Core ${backupPath ? "creates a safe backup of" : "atomically creates and encrypts"} ${label}.`, {
       descriptors: true,
       private_keys_enabled: true,
       encrypted,
@@ -113,13 +113,13 @@ export const demoVault: Operation<VaultSummary> = {
     publicBackup: demoPublicBackup,
   },
   rpc: [
-    trace("listdescriptors", "Prikuplja samo javne receive i change podatke.", { private: false }),
-    trace("getdescriptorinfo", "Bitcoin Core validira 2-of-3 policy i checksum.", {
+    trace("listdescriptors", "Collects only public receive and change data.", { private: false }),
+    trace("getdescriptorinfo", "Bitcoin Core validates the 2-of-3 policy and checksum.", {
       isrange: true,
       issolvable: true,
       hasprivatekeys: false,
     }),
-    trace("importdescriptors", "Aktivira receive i change policy u watch-only coordinatoru.", [
+    trace("importdescriptors", "Activates the receive and change policies in the watch-only coordinator.", [
       { success: true },
       { success: true },
     ]),
@@ -135,8 +135,8 @@ export const demoReceive: Operation<ReceiveSnapshot> = {
     watchOnly: true,
   },
   rpc: [
-    trace("getnewaddress", "Generira novu Signet adresu iz vault policyja.", "tb1q…example"),
-    trace("getbalances", "Čita balance samo iz lokalnog coordinatora.", { mine: { trusted: 0.0001 } }),
+    trace("getnewaddress", "Generates a new Signet address from the vault policy.", "tb1q…example"),
+    trace("getbalances", "Reads the balance only from the local coordinator.", { mine: { trusted: 0.0001 } }),
   ],
 };
 
@@ -155,7 +155,7 @@ export const demoSpend = (signedBy: string[] = []): Operation<SpendDraft> => ({
     mempoolPreflight: { state: "not-run" },
   },
   rpc: [
-    trace(signedBy.length ? "walletprocesspsbt" : "walletcreatefundedpsbt", signedBy.length ? "Bitcoin Core dodaje lokalni potpis." : "Coordinator priprema transakciju bez potpisa.", {
+    trace(signedBy.length ? "walletprocesspsbt" : "walletcreatefundedpsbt", signedBy.length ? "Bitcoin Core adds a local signature." : "The coordinator prepares an unsigned transaction.", {
       psbt: "[REDACTED]",
       complete: signedBy.length >= 2,
     }),
@@ -170,7 +170,7 @@ export const demoFinalizeSpend = (draft: SpendDraft): Operation<SpendDraft> => (
     mempoolPreflight: { state: "not-run" },
   },
   rpc: [
-    trace("finalizepsbt", "Bitcoin Core lokalno finalizira potpisani PSBT bez broadcasta.", {
+    trace("finalizepsbt", "Bitcoin Core finalizes the signed PSBT locally without broadcasting it.", {
       complete: true,
       hex: "[REDACTED]",
     }),
@@ -185,7 +185,7 @@ export const demoPreflightSpend = (draft: SpendDraft): Operation<SpendDraft> => 
     mempoolPreflight: { state: "accepted" },
   },
   rpc: [
-    trace("testmempoolaccept", "Bitcoin Core lokalno provjerava mempool pravila bez broadcasta.", [
+    trace("testmempoolaccept", "Bitcoin Core checks mempool rules locally without broadcasting.", [
       { allowed: true },
     ]),
   ],
@@ -203,7 +203,7 @@ export const demoBroadcast = (): Operation<BroadcastResult> => ({
   rpc: [
     trace(
       "sendrawtransaction",
-      "Lokalni Bitcoin Core broadcasta finaliziranu transakciju na Signet.",
+      "The local Bitcoin Core broadcasts the finalized transaction to Signet.",
       "7f3a…1c00",
     ),
   ],

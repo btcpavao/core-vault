@@ -5,29 +5,30 @@ pub fn validate_connection(settings: &ConnectionSettings) -> Result<(), String> 
     let host = settings.host.trim().to_ascii_lowercase();
     if !matches!(host.as_str(), "127.0.0.1" | "localhost" | "::1") {
         return Err(
-            "V1 dopušta isključivo lokalni Bitcoin Core (127.0.0.1, localhost ili ::1).".into(),
+            "V1 allows only a local Bitcoin Core instance (127.0.0.1, localhost, or ::1).".into(),
         );
     }
     if settings.port == 0 {
-        return Err("RPC port mora biti između 1 i 65535.".into());
+        return Err("The RPC port must be between 1 and 65535.".into());
     }
     let cookie = Path::new(&settings.cookie_path);
     if !cookie.is_absolute() {
-        return Err("Cookie path mora biti apsolutna lokalna putanja.".into());
+        return Err("The cookie path must be an absolute local path.".into());
     }
     Ok(())
 }
 
 pub fn validate_wallet_name(name: &str) -> Result<(), String> {
     if name.is_empty() || name.len() > 64 {
-        return Err("Naziv walleta mora imati između 1 i 64 znaka.".into());
+        return Err("The wallet name must contain between 1 and 64 characters.".into());
     }
     if !name
         .chars()
         .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
     {
         return Err(
-            "Naziv walleta smije sadržavati samo slova, brojeve, crticu, podvlaku i točku.".into(),
+            "The wallet name may contain only letters, numbers, hyphens, underscores, and periods."
+                .into(),
         );
     }
     Ok(())
@@ -64,13 +65,13 @@ pub fn validate_public_backup(backup: &PublicVaultBackup) -> Result<String, Stri
         || backup.signers.len() != 3
         || backup.coordinator_private_keys
     {
-        return Err("Public backup ne odgovara podržanoj Core Vault V1 shemi.".into());
+        return Err("The public backup does not match the supported Core Vault V1 schema.".into());
     }
 
     let serialized = serde_json::to_string_pretty(backup)
-        .map_err(|_| "Public backup nije moguće serijalizirati.".to_string())?;
+        .map_err(|_| "Could not serialize the public backup.".to_string())?;
     if contains_private_material(&serialized) {
-        return Err("STOP: public backup sadrži uzorak privatnog ključa.".into());
+        return Err("STOP: The public backup contains a private-key pattern.".into());
     }
     Ok(serialized)
 }

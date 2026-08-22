@@ -1,105 +1,96 @@
-# Core Vault UI — arhitektura V1
+# Core Vault UI V1 architecture
 
-> Ovaj dokument zadržava arhitekturu izvornog 2-od-3 toka. Prostorni shell, Personal Vault RPC mapa i nova stanja dokumentirani su u [docs/RPC_MAPPING.md](docs/RPC_MAPPING.md) i [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md).
+> This document preserves the architecture of the original 2-of-3 flow. The spatial shell, Personal Vault RPC map, and new states are documented in [docs/RPC_MAPPING.md](docs/RPC_MAPPING.md) and [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md).
 
-## Kratka procjena
+## Summary
 
-Postojeći repository bio je samostalni offline HTML vodič. Njegovi parseri i sigurnosne
-poruke korisna su referenca, ali njegova `copy → Debug Console → paste` arhitektura ne
-može ispuniti novi cilj. V1 zato prelazi na Tauri: React prikazuje tijek, a mali Rust
-backend jedini razgovara s lokalnim Bitcoin Core RPC-em.
+The original repository was a standalone offline HTML guide. Its parsers and security messages remain useful references, but its `copy, open Debug Console, paste` architecture cannot meet the current goal. V1 therefore uses Tauri. React presents the flow, while a small Rust backend is the only component that communicates with the local Bitcoin Core RPC.
 
 ```text
 React + TypeScript UI
-        │  tipizirane Tauri naredbe (bez RPC credentiala u logovima)
+        │  typed Tauri commands, no RPC credentials in logs
         ▼
 Rust Core Vault backend
-        │  HTTP JSON-RPC, cookie auth, isključivo loopback
+        │  HTTP JSON-RPC, cookie authentication, loopback only
         ▼
-lokalni Bitcoin Core na Signetu
+local Bitcoin Core on Signet
 ```
 
-Bitcoin Core ostaje izvor istine za wallet, ključeve, descriptor checksum, validaciju,
-potpisivanje i broadcast. Aplikacija nije wallet engine i nema vlastitu kriptografiju.
+Bitcoin Core remains the source of truth for wallets, keys, descriptor checksums, validation, signing, and broadcast. The application is not a wallet engine and implements no cryptography.
 
-## Predložena struktura
+## Repository structure
 
 ```text
 src/
-  App.tsx                  glavni wizard i UI state
-  main.tsx                 React entrypoint
-  styles.css               dizajn sustav i responsive layout
-  types.ts                 frontend DTO tipovi
-  components/              status, policy i RPC transparency komponente
-  lib/tauri.ts             tipizirani invoke adapter
+  App.tsx                  main wizard and UI state
+  main.tsx                 React entry point
+  styles.css               design system and responsive layout
+  types.ts                 frontend DTO types
+  components/              status, policy, and RPC transparency components
+  lib/tauri.ts             typed invoke adapter
 src-tauri/
   Cargo.toml
   tauri.conf.json
   src/
-    main.rs                registracija naredbi i app state
-    rpc.rs                 localhost JSON-RPC + cookie auth
-    vault.rs               Core operacije i 2-of-3 orkestracija
-    security.rs            loopback, naziv, secret i export provjere
-    types.rs               serijalizirani DTO tipovi
-tests/                     frontend unit testovi sigurnosnih helpera
+    main.rs                command registration and application state
+    rpc.rs                 localhost JSON-RPC and cookie authentication
+    vault.rs               Core operations and 2-of-3 coordination
+    security.rs            loopback, naming, secret, and export checks
+    types.rs               serialized DTO types
+tests/                     frontend unit tests for security helpers
 ARCHITECTURE.md
 SECURITY.md
 ```
 
-## Bitcoin Core RPC površina
+## Bitcoin Core RPC exposure
 
-| Namjena | RPC | Sigurnosna provjera |
+| Purpose | RPC | Security check |
 | --- | --- | --- |
-| Veza i mreža | `getblockchaininfo`, `getnetworkinfo` | `chain === "signet"`; inače hard stop |
-| Pregled walleta | `listwallets`, `listwalletdir` | lokalni Core, jedinstvena imena |
-| K1/K2/K3 | `createwallet`, `getwalletinfo` | descriptor wallet, privatni ključevi uključeni |
-| Enkripcija | `encryptwallet`, `getwalletinfo` | passphrase je redigiran i kratko živi |
-| Backup signera | `backupwallet` | apsolutna korisnički odabrana putanja, nastala datoteka |
-| Javni ključevi | `listdescriptors` s `private=false` | `wpkh`, `/0/*`, `/1/*`, različiti fingerprinti/tpubovi, bez private materijala |
-| Multisig descriptor | `getdescriptorinfo` | ranged, solvable, bez privatnih ključeva; Core daje checksum |
-| Coordinator | `createwallet`, `getwalletinfo` | blank descriptor wallet i `private_keys_enabled=false` |
-| Import | `importdescriptors` | external receive + internal change; oba `success=true` |
-| Receive test | `getnewaddress`, `getaddressinfo`, `getbalances` | Signet adresa, solvable watch-only coordinator |
-| Spending test | `validateaddress`, `walletcreatefundedpsbt`, `walletprocesspsbt`, `walletpassphrase`, `walletlock`, `finalizepsbt`, `sendrawtransaction` | dvije različite Core signature, complete PSBT, lokalni broadcast |
+| Connection and network | `getblockchaininfo`, `getnetworkinfo` | `chain === "signet"`, otherwise hard stop |
+| Wallet inspection | `listwallets`, `listwalletdir` | local Core, unique names |
+| K1/K2/K3 | `createwallet`, `getwalletinfo` | descriptor wallet, private keys enabled |
+| Encryption | `encryptwallet`, `getwalletinfo` | passphrase is redacted and short-lived |
+| Signer backup | `backupwallet` | absolute user-selected path, resulting file exists |
+| Public keys | `listdescriptors` with `private=false` | `wpkh`, `/0/*`, `/1/*`, unique fingerprints and tpubs, no private material |
+| Multisig descriptor | `getdescriptorinfo` | ranged, solvable, no private keys, Core supplies the checksum |
+| Coordinator | `createwallet`, `getwalletinfo` | blank descriptor wallet and `private_keys_enabled=false` |
+| Import | `importdescriptors` | external receive and internal change, both `success=true` |
+| Receive test | `getnewaddress`, `getaddressinfo`, `getbalances` | Signet address, solvable watch-only coordinator |
+| Spend test | `validateaddress`, `walletcreatefundedpsbt`, `walletprocesspsbt`, `walletpassphrase`, `walletlock`, `finalizepsbt`, `sendrawtransaction` | two distinct Core signatures, complete PSBT, local broadcast |
 
-V1 zahtijeva Bitcoin Core 26 ili noviji kako bi RPC ugovor bio uzak i testabilan.
+V1 requires Bitcoin Core 26 or newer so the RPC contract stays narrow and testable.
 
-## Granice povjerenja
+## Trust boundaries
 
-1. React je nepovjerljivi presentation sloj. Backend ponovno validira host, putanje,
-   wallet imena, mrežu, RPC odgovore i public backup prije zapisa.
-2. RPC je dopušten samo za `127.0.0.1`, `localhost` i `::1`. Nema proizvoljnog URL-a,
-   redirecta ni udaljenog noda.
-3. Cookie ostaje u Rust procesu, čita se s diska za lokalni poziv i nikada se ne vraća UI-ju.
-4. Passphrase se ne sprema, ne logira i u UI-ju se drži u nekontroliranom inputu koji se
-   briše odmah nakon poziva. Rust koristi zeroizing spremnik gdje je praktično moguće.
-5. Descriptor i coordinator invarijante su zaustavne kontrole. Ne postoji "continue anyway".
-6. Public export prolazi backend secret scan i koristi samo eksplicitnu schema strukturu.
+1. React is an untrusted presentation layer. The backend revalidates hosts, paths, wallet names, networks, RPC responses, and public backups before writing.
+2. RPC is allowed only for `127.0.0.1`, `localhost`, and `::1`. Core Vault accepts no arbitrary URL, redirect, or remote node.
+3. The cookie stays in the Rust process, is read from disk for a local call, and is never returned to the UI.
+4. Core Vault neither stores nor logs passphrases. The UI keeps a passphrase in an uncontrolled input that it clears immediately after the call. Rust uses a zeroizing container where practical.
+5. Descriptor and coordinator invariants are stopping controls. There is no "continue anyway" path.
+6. Public exports pass a backend secret scan and use an explicit schema.
 
-## Namjerni V1 non-goals
+## Deliberate V1 non-goals
 
-- Mainnet i Testnet
-- remote node, Electrum, cloud backend, accounti, analytics i telemetrija
-- hardware walleti i air-gapped signing
-- seed/BIP39, WIF, xprv/tprv import ili export
-- vlastiti signer, descriptor checksum ili Bitcoin kriptografija
-- Taproot, MuSig2, Miniscript, timelock, inheritance i policy osim 2-of-3
-- collaborative custody, mobilna aplikacija i automatska fizička backup strategija
-- napredni coin control, batch outputi, RBF kontrole i opći transaction history
+- Mainnet and Testnet
+- remote nodes, Electrum, cloud backends, accounts, analytics, and telemetry
+- hardware wallets and air-gapped signing
+- seed or BIP39, WIF, xprv, or tprv import and export
+- a custom signer, descriptor checksum, or Bitcoin cryptography
+- Taproot, MuSig2, Miniscript, timelocks, inheritance, or policies other than 2-of-3
+- collaborative custody, a mobile application, or an automated physical-backup strategy
+- advanced coin control, batch outputs, RBF controls, or general transaction history
 
-## Implementacija po fazama
+## Implementation phases
 
-1. Migrirati build na React/TypeScript/Vite i dodati minimalni Tauri shell.
-2. Implementirati sigurni RPC transport, autodetekciju cookieja i Signet hard stop.
-3. Implementirati kreiranje, provjeru, enkripciju i backup K1/K2/K3 walleta.
-4. Ekstrahirati javne descriptor podatke i validirati 2-of-3 policy kroz Core.
-5. Kreirati watch-only coordinator i atomski provjeriti oba importa.
-6. Implementirati wizard, status, napredne postavke i redigirani RPC transparency panel.
-7. Implementirati uski Signet receive/spend test bez ručnog PSBT-a.
-8. Implementirati javni JSON export, mock demo, Rust/TypeScript testove i build provjeru.
+1. Migrate the build to React, TypeScript, and Vite, then add a minimal Tauri shell.
+2. Implement secure RPC transport, cookie autodetection, and a Signet hard stop.
+3. Implement creation, verification, encryption, and backup for the K1, K2, and K3 wallets.
+4. Extract public descriptor data and validate the 2-of-3 policy through Core.
+5. Create the watch-only coordinator and atomically verify both imports.
+6. Implement the wizard, status display, advanced settings, and redacted RPC transparency panel.
+7. Implement a narrow Signet receive and spend test without manual PSBT handling.
+8. Implement the public JSON export, mock demo, Rust and TypeScript tests, and build check.
 
-## Auditabilnost i kasnije proširenje
+## Auditability and later expansion
 
-Policy-specifična logika nalazi se u `vault.rs`; transport ne zna ništa o multisigu.
-Novi policy u budućnosti dobiva zaseban builder i testove, bez širenja V1 uvjeta.
-Frontend koristi stabilne DTO-e i ne konstruira RPC zahtjeve ni descriptore.
+Policy-specific logic lives in `vault.rs`. The transport layer knows nothing about multisig. A future policy gets a separate builder and tests without broadening V1 conditions. The frontend uses stable DTOs and constructs neither RPC requests nor descriptors.

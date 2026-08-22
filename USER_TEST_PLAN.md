@@ -1,127 +1,113 @@
-# Core Vault UI — user test plan V1
+# Core Vault UI V1 user test plan
 
-## Istraživačko pitanje
+## Research question
 
-Može li osoba koja zna koristiti obični Bitcoin Core wallet sigurno završiti 2-of-3 Signet
-tijek bez Debug Consolea i zatim vlastitim riječima objasniti uloge tri signera, vaulta,
-coordinatora, backupa i dvaju potpisa?
+Can someone who knows how to use a standard Bitcoin Core wallet safely complete the 2-of-3 Signet flow without Debug Console, then explain the roles of the three signers, the vault, the coordinator, the backups, and the two signatures in their own words?
 
-Brzina nije primarna metrika. Primarne metrike su siguran završetak, razumijevanje i
-prepoznavanje nepovratnih odluka.
+Speed is not the primary measure. Safe completion, understanding, and recognition of irreversible decisions matter most.
 
-## Persona i uzorak
+## Participant profile and sample
 
-Persona:
+Target participant:
 
-> Osoba zna instalirati Bitcoin Core, napraviti obični wallet, primiti i poslati bitcoin,
-> ali nikada nije koristila multisig, descriptor, RPC ili PSBT.
+> Someone who can install Bitcoin Core, create a standard wallet, and receive and send bitcoin, but has never used multisig, descriptors, RPC, or PSBTs.
 
-Prvi krug: 5 moderiranih sudionika. Poželjno je uključiti barem jednu osobu koja koristi
-tipkovnicu ili povećani prikaz te različite razine iskustva unutar zadane persone.
+The first round uses five moderated participants. If possible, include at least one person who uses keyboard navigation or display magnification, and cover different experience levels within the target profile.
 
-## Sigurno testno okruženje
+## Safe test environment
 
-- odvojeni Bitcoin Core 26+ profil, samo Signet, `server=1`
-- unaprijed sinkroniziran node i mala količina Signet coina
-- jedinstveni wallet nazivi po sesiji i prazna test backup mapa
-- screen recording samo uz pristanak; bez snimanja password inputa ili file dijaloga
-- moderator nikad ne traži stvarni seed, key, wallet backup ili Mainnet adresu
-- prije početka naglasiti: testira se proizvod, ne sudionik; test coin nema tržišnu vrijednost
+- separate Bitcoin Core 26+ profile using Signet only, with `server=1`
+- fully synchronized node and a small amount of Signet coins
+- unique wallet names for each session and an empty test-backup directory
+- screen recording only with consent, with password inputs and file dialogs excluded
+- no request from the moderator for a real seed, key, wallet backup, or Mainnet address
+- a statement before the session that the product, not the participant, is being tested and that test coins have no market value
 
-## Zadatak za sudionika
+## Participant task
 
-> Napravite 2-of-3 vault na Signetu, primite testna sredstva i pošaljite dio sredstava
-> koristeći dva potpisa. Zamislite da taj setup želite moći rekonstruirati i bez ove aplikacije.
+> Create a 2-of-3 vault on Signet, receive test funds, and send part of them using two signatures. Assume you want to be able to reconstruct this setup without the application.
 
-Ne objašnjavati descriptor, RPC ili PSBT prije zadatka. Ne pomagati osim ako sudionik potpuno
-zapne ili bi napravio radnju izvan Signeta.
+Do not explain descriptors, RPC, or PSBTs before the task. Help only if the participant is completely stuck or is about to act outside Signet.
 
-## Scenarij
+## Scenario
 
-1. **Orijentacija** — s welcome ekrana objasniti što korisnik misli da će se napraviti.
-2. **Connection** — spojiti lokalni Core; po potrebi pronaći Advanced settings.
-3. **K1/K2/K3** — kreirati i enkriptirati svaki signing wallet.
-4. **Vault review** — prije CTA-a objasniti što znači izgubiti jedan odnosno dva ključa.
-5. **Backup** — izraditi tri Core backupa i public config; objasniti razliku.
-6. **Receive** — generirati adresu, kopirati je i prepoznati skriven balance.
-7. **Fund** — moderator/faucet šalje unaprijed dogovorene Signet sredstva; korisnik osvježava.
-8. **Send/review** — unijeti primatelja, 5.000 sats i fee; provjeriti sve review stavke.
-9. **Sign** — odabrati bilo koja dva različita signera i objasniti zašto coordinator nije dovoljan.
-10. **Broadcast/change** — potvrditi finalnu radnju, kopirati txid i objasniti remaining/change.
+1. **Orientation.** From the welcome screen, explain what you think the application will do.
+2. **Connection.** Connect the local Core instance and find Advanced settings if needed.
+3. **K1/K2/K3.** Create and encrypt each signing wallet.
+4. **Vault review.** Before using the CTA, explain what losing one key or two keys would mean.
+5. **Backup.** Create three Core backups and the public configuration, then explain the difference.
+6. **Receive.** Generate and copy an address, and recognize that the balance is hidden.
+7. **Fund.** The moderator or faucet sends the agreed Signet funds, then the participant refreshes.
+8. **Send and review.** Enter the recipient, 5,000 sats, and fee, then check every review item.
+9. **Sign.** Choose any two different signers and explain why the coordinator alone is insufficient.
+10. **Broadcast and change.** Confirm the final action, copy the txid, and explain the remaining balance and change.
 
-Rotirati signer parove između sesija: K1+K2, K1+K3, K2+K3.
+Rotate signer pairs between sessions: K1+K2, K1+K3, and K2+K3.
 
-## Failure-state zadaci
+## Failure-state tasks
 
-Nakon happy patha pokazati najviše dva scenarija po sudioniku kako se sesija ne bi pretvorila
-u ispit:
+Show no more than two scenarios per participant after the happy path so the session does not turn into an exam:
 
-- Core ugašen ili bez `server=1`
+- Core is stopped or lacks `server=1`
 - remote RPC host
 - Mainnet chain hard stop
-- kriva wallet lozinka / locked signer
-- otkazani file dialog
-- nedostajući public backup
-- invalid destination ili insufficient funds
-- pokušaj istim signerom dati drugi potpis
+- wrong wallet passphrase or locked signer
+- cancelled file dialog
+- missing public backup
+- invalid destination or insufficient funds
+- second signature attempted with the same signer
 
-Promatrati razumije li poruka: što se dogodilo, jesu li sredstva/transakcija sigurni i što
-sljedeće napraviti.
+Observe whether the participant can tell what happened, whether the funds and transaction are safe, and what to do next.
 
-## Moderatorski protokol
+## Moderator protocol
 
-- Koristiti neutralno: “Što očekujete da će se dogoditi?”
-- Ako sudionik šuti, podsjetiti na think-aloud, ali ne imenovati kontrolu.
-- Kod zastoja prvo zabilježiti očekivanje i pokušaje. Pomoći tek nakon 60–90 sekundi ili na
-  izričit zahtjev.
-- Zaustaviti test ako se pojavi Mainnet, stvarni privatni podatak ili nejasno stanje broadcasta.
-- Nakon pomoći označiti ostatak zadatka kao assisted, ne failed.
+- Use neutral prompts such as, "What do you expect to happen?"
+- If the participant is silent, remind them to think aloud without naming a control.
+- At an impasse, first record expectations and attempts. Help only after 60 to 90 seconds or an explicit request.
+- Stop the test if Mainnet, real private data, or an ambiguous broadcast state appears.
+- After helping, mark the rest of the task as assisted, not failed.
 
-## Što bilježimo
+## What to record
 
-| Signal | Primjer bilješke |
+| Signal | Example note |
 | --- | --- |
-| Zastoj | vrijeme, ekran, zadnja radnja, što traži pogledom |
-| Mentalni model | kako opisuje signer, vault i coordinator |
-| Očekivanje | što misli da će CTA napraviti i može li se poništiti |
-| Nesigurnost | lozinka, backup lokacija, public config, broadcast |
-| Pogrešan klik | element koji izgleda interaktivno ili nevidljiv CTA |
-| Progressive disclosure | kada i zašto otvara RPC panel |
-| Recovery | može li iz error poruke odrediti sljedeći korak |
-| Accessibility | tab redoslijed, fokus, čitanje statusa, zoom |
+| Impasse | time, screen, last action, where the participant is looking |
+| Mental model | how the participant describes the signer, vault, and coordinator |
+| Expectation | what the participant thinks a CTA will do and whether it can be undone |
+| Uncertainty | passphrase, backup location, public configuration, broadcast |
+| Misclick | control that appears interactive or CTA that is not noticed |
+| Progressive disclosure | when and why the participant opens the RPC panel |
+| Recovery | whether the participant can identify the next step from the error message |
+| Accessibility | tab order, focus, status reading, zoom |
 
-## Završna comprehension pitanja
+## Final comprehension questions
 
-1. Koliko ključeva postoji i koliko ih treba za trošenje?
-2. Što se događa ako izgubite K2? A ako izgubite K2 i K3?
-3. Može li coordinator sam potrošiti sredstva? Zašto?
-4. Koja je razlika između `K1 backup` i `public vault configuration`?
-5. Gdje su se nalazili privatni ključevi i tko je potpisao?
-6. Što se promijenilo nakon prvog potpisa?
-7. Kamo je otišao ostatak nakon plaćanja?
-8. Što biste trebali sačuvati kada biste obrisali Core Vault UI?
+1. How many keys exist, and how many are needed to spend?
+2. What happens if you lose K2? What if you lose K2 and K3?
+3. Can the coordinator spend funds by itself? Why?
+4. What is the difference between a `K1 backup` and the `public vault configuration`?
+5. Where were the private keys, and what performed the signing?
+6. What changed after the first signature?
+7. Where did the remainder go after payment?
+8. What should you preserve if you delete Core Vault UI?
 
-## Kriteriji uspjeha prvog kruga
+## First-round success criteria
 
-- 4/5 sudionika završavaju bez kritične moderatorske intervencije
-- 5/5 nikad ne pokušavaju koristiti Mainnet nakon upozorenja
-- 4/5 točno objasne “2 of 3”, coordinator bez ključa i updated transaction nakon prvog potpisa
-- 4/5 razlikuju signing-wallet backup od public configa
-- 5/5 prije broadcasta identificiraju destination, amount i fee
-- niti jedan sudionik ne vjeruje da demo predstavlja stvarnu Core vezu
-- tipkovnički korisnik može dovršiti svaki korak i uvijek zna gdje je fokus
+- 4 of 5 participants finish without critical moderator intervention.
+- 5 of 5 never attempt to use Mainnet after the warning.
+- 4 of 5 correctly explain "2 of 3," the keyless coordinator, and the updated transaction after the first signature.
+- 4 of 5 distinguish a signing-wallet backup from the public configuration.
+- 5 of 5 identify the destination, amount, and fee before broadcast.
+- No participant believes the demo represents a real Core connection.
+- A keyboard user can complete every step and always knows where focus is.
 
-Jedna kritična pogreška — npr. uvjerenje da je public config dovoljan za potpis ili da je
-Mainnet dopušten — blokira napredovanje prema sljedećoj fazi bez obzira na prosjek.
+One critical error, such as believing the public configuration is enough to sign or that Mainnet is allowed, blocks progression to the next phase regardless of the average result.
 
-## Analiza i prioritizacija
+## Analysis and prioritization
 
-- **P0 sigurnost:** može dovesti do pogrešne mreže, gubitka pristupa, secret leakagea ili
-  nejasnog broadcasta; odmah zaustavlja release.
-- **P1 completion:** korisnik ne može završiti acceptance flow bez pomoći.
-- **P2 razumijevanje:** flow završava, ali ključni mentalni model je pogrešan.
-- **P3 polish:** čitljivost, ritam, wording ili vizualni affordance bez sigurnosne posljedice.
+- **P0 security.** Could cause use of the wrong network, loss of access, secret leakage, or an ambiguous broadcast. Stops the release immediately.
+- **P1 completion.** The participant cannot finish the acceptance flow without help.
+- **P2 understanding.** The participant finishes but holds an incorrect key mental model.
+- **P3 polish.** Readability, pacing, wording, or visual affordance without a security consequence.
 
-Za svaki nalaz zapisati ekran, opažanje, korisnikovu doslovnu kratku izjavu, očekivanje,
-posljedicu, severity i predloženu najmanju promjenu. Nakon izmjene ponovno testirati isti
-zadatak s novim sudionicima; ne računati autorovu procjenu kao user-test dokaz.
+For each finding, record the screen, observation, a short verbatim participant statement, expectation, consequence, severity, and smallest proposed change. After making a change, retest the same task with new participants. The author's judgment does not count as user-test evidence.

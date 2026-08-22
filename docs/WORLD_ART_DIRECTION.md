@@ -1,42 +1,39 @@
-# Core Vault — prostorni V2 vizualni jezik
+# Core Vault spatial V2 visual language
 
-## Referentni izvori
+## Reference sources
 
-Prostorni presentation sloj izveden je iz dvije vizualne cjeline s btcpavao.com:
+The spatial presentation layer draws from two visual series on btcpavao.com:
 
 - [The Long Road Back to Bitcoin Core](https://btcpavao.com/en/bitcoin-core/the-long-road-back-to-bitcoin-core/)
-- [Kako Bitcoin Core generira entropiju kada napravimo novi wallet](https://btcpavao.com/hr/bitcoin-core/kako-bitcoin-core-generira-entropiju-kada-napravimo-novi-wallet/)
+- [How Bitcoin Core generates entropy when we create a new wallet](https://btcpavao.com/hr/bitcoin-core/kako-bitcoin-core-generira-entropiju-kada-napravimo-novi-wallet/)
 
-Pregledane su sve slike u oba članka. Ponavljajući motivi postali su pravila svijeta: mediteranski
-vapnenac i more, brončani spojevi, prozirne komore, plavi blokovi i tokovi podataka, zlatne linije
-ključeva i determinističkih korijena te mirno dnevno svjetlo.
+The design review covered every image in both articles. Their recurring motifs became rules for the world: Mediterranean limestone and sea, bronze joints, transparent chambers, blue blocks and data flows, gold key and deterministic-root lines, and calm daylight.
 
-## Mapiranje prostorija
+## Room mapping
 
-| Prostorija | Prostorni motiv | Funkcionalno značenje |
+| Room | Spatial motif | Functional meaning |
 | --- | --- | --- |
-| Glavna dvorana | četiri kamena prolaza i središnji stakleni trezor | navigacija i odabir walleta |
-| Radionica | zaštićeni korijen, ključ i tri odvojene kapsule | odabir single-signature ili 2-od-3 politike |
-| Komora trezora | koncentrična brončana vrata i dva svjetlosna kanala | stanje, primitak, slanje i backup |
-| Arhiv | recovery kovčeg i kapsule u kamenim nišama | izrada kopije i dokaz povrata |
-| Komunikacije | prozirna komora s plavim ulazom i zlatnim izlazom | receive adresa i PSBT prijedlog |
-| Strojarnica | veliki lokalni stroj s vidljivim tokovima | P2P stanje, sinkronizacija i Core metrike |
-| Zvjezdarnica | bazen blokova uz arhiv cijelog lanca | chain, wallet i RPC opažanja |
-| Knjižnica | zid plavih blokova i osvijetljene stele | izvori, ograničenja i status projekta |
+| Main Hall | four stone passages and a central glass vault | navigation and wallet selection |
+| Workshop | protected root, key, and three separate capsules | choose a single-signature or 2-of-3 policy |
+| Vault Chamber | concentric bronze doors and two light channels | status, receive, send, and backup |
+| Archive | recovery chest and capsules in stone niches | create a backup and prove a restore |
+| Communications | transparent chamber with a blue input and gold output | receive address and PSBT proposal |
+| Engine Room | large local machine with visible flows | P2P status, synchronization, and Core metrics |
+| Observatory | pool of blocks beside the full-chain archive | chain, wallet, and RPC observations |
+| Library | wall of blue blocks and illuminated steles | sources, limitations, and project status |
 
-## Pravila interakcije
+## Interaction rules
 
-- Prostorija je primarno sučelje; artefakti su semantički `button` elementi s jasnim imenima.
-- Forma se pojavljuje tek nakon odabira artefakta, u kontekstualnoj kamenoj/staklenoj konzoli.
-- Globalna navigacija je pomoćni, uvijek dostupan fallback i nije glavni način kretanja.
-- Status plava označava podatke, vezu i verifikaciju; zlatna označava ključ, identitet ili izlaz.
-- Kritične radnje i dalje koriste konvencionalne potvrde, eksplicitan tekst i odvojeni broadcast.
-- Reduced motion zaustavlja dolaske prostorija, lebdeću prašinu, protok energije i rotacije.
+- The room is the primary interface. Artifacts are semantic `button` elements with clear names.
+- A form appears only after the user selects an artifact, inside a contextual stone and glass console.
+- Global navigation is an always-available fallback, not the primary way to move through the world.
+- Blue status light represents data, connection, and verification. Gold represents a key, identity, or output.
+- Critical actions still use conventional confirmations, explicit language, and a separate broadcast step.
+- Reduced-motion mode stops room entrances, floating dust, energy flow, and rotation.
 
-## Implementacija
+## Implementation
 
-- `src/components/world.tsx` sadrži zajedničke primitive: `WorldScene`, `ArtifactButton`,
-  `ContextOverlay`, `EnergyCore`, `ObservationBasin` i `RecessedLedger`.
-- `src/SpatialApp.tsx` orkestrira prostorije i postojeće Core funkcije.
-- `src/spatial.css` definira materijale, kompozicije, motion i responsive raspored.
-- `src/assets/world/` sadrži lokalne, optimizirane WebP scene. Nema runtime mrežnih asseta.
+- `src/components/world.tsx` contains the shared primitives: `WorldScene`, `ArtifactButton`, `ContextOverlay`, `EnergyCore`, `ObservationBasin`, and `RecessedLedger`.
+- `src/SpatialApp.tsx` coordinates the rooms and existing Core functions.
+- `src/spatial.css` defines materials, composition, motion, and responsive layout.
+- `src/assets/world/` contains local optimized WebP scenes. The application loads no runtime network assets.

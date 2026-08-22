@@ -1,30 +1,22 @@
 # Core Vault project specifications
 
-Ovaj direktorij sadrži autoritativne produktne, dizajnerske, arhitekturne, interakcijske,
-sigurnosne i implementacijske specifikacije za Core Vault. Ti su dokumenti sastavni dio
-projekta, a ne vanjske ili neobvezne bilješke.
+This directory contains the authoritative product, design, architecture, interaction, security, and implementation specifications for Core Vault. These documents are part of the project, not external or optional notes.
 
-Prije svake značajne promjene aplikacije potrebno je pročitati i slijediti relevantne
-specifikacije iz ovog direktorija. `01_VISION_AND_PHILOSOPHY.md` najviši je produktni dokument
-i definira temeljnu viziju Core Vaulta. Kasniji dokumenti mogu postati tehnički precizniji,
-ali ne smiju prešutno proturječiti toj viziji.
+Read and follow the relevant specifications before making any substantial application change. `01_VISION_AND_PHILOSOPHY.md` is the highest product authority and defines the core vision for Core Vault. Later documents may be more technically specific, but they must not silently contradict that vision.
 
-Ako se implementacija i dokumentacija ne slažu, nesklad se mora izričito istaknuti. Ne smije
-se prešutno odabrati jedna strana. Postojeća funkcionalna Bitcoin Core integracija mora se
-očuvati osim ako kasnija, odobrena specifikacija izričito zahtijeva promjenu.
+If the implementation and documentation disagree, state the conflict explicitly. Do not silently choose one side. Preserve the working Bitcoin Core integration unless a later approved specification explicitly requires a change.
 
-## Hijerarhija specifikacija
+## Specification hierarchy
 
-1. `01_VISION_AND_PHILOSOPHY.md` — temeljna produktna vizija
-2. `02_DESIGN_PRINCIPLES.md` — nepromjenjiva dizajnerska pravila
-3. `03_TECHNICAL_ARCHITECTURE.md` — tehnička struktura softvera
-4. `04_WORLD_BIBLE.md` — svijet Core Vaulta i prostorni jezik
-5. `05_ROOM_DESIGN.md` — prostorije i njihove funkcije
-6. `06_INTERACTION_DESIGN.md` — način interakcije sa svijetom
-7. `07_BITCOIN_CORE_INTEGRATION.md` — mapiranje iskustva na Bitcoin Core
-8. `08_ART_DIRECTION.md` — materijali, svjetlo, atmosfera, zvuk i animacija
-9. `09_IMPLEMENTATION_ROADMAP.md` — redoslijed implementacije
-10. `10_CODEX_RULES.md` — pravila budućeg razvoja uz pomoć AI-ja
+1. `01_VISION_AND_PHILOSOPHY.md`: core product vision
+2. `02_DESIGN_PRINCIPLES.md`: fixed design rules
+3. `03_TECHNICAL_ARCHITECTURE.md`: software architecture
+4. `04_WORLD_BIBLE.md`: the Core Vault world and its spatial language
+5. `05_ROOM_DESIGN.md`: rooms and their functions
+6. `06_INTERACTION_DESIGN.md`: interaction with the world
+7. `07_BITCOIN_CORE_INTEGRATION.md`: mapping the experience to Bitcoin Core
+8. `08_ART_DIRECTION.md`: materials, lighting, atmosphere, sound, and animation
+9. `09_IMPLEMENTATION_ROADMAP.md`: implementation order
+10. `10_CODEX_RULES.md`: rules for future AI-assisted development
 
-Postojeći nenumerirani dokumenti ostaju povijesna, tehnička ili prototipska dokumentacija dok
-se njihov status ne razriješi kroz odobrene specifikacije. Oni ne nadjačavaju gornju hijerarhiju.
+Existing unnumbered documents remain historical, technical, or prototype documentation until an approved specification resolves their status. They do not override the hierarchy above.

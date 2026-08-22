@@ -31,7 +31,7 @@ export const loadPreferences = (): Preferences => {
     return {
       ...defaults,
       ...parsed,
-      language: parsed.language === "hr" ? "hr" : parsed.language === "en" ? "en" : defaults.language,
+      language: "en",
       volume: Math.max(0, Math.min(1, Number(parsed.volume ?? defaults.volume))),
     };
   } catch {

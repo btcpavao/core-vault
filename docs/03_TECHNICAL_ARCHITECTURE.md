@@ -2551,10 +2551,7 @@ Do not display full Bitcoin addresses as decorative 3D geometry.
 
 User-facing interface copy should eventually use a localization system.
 
-Initial supported languages should include:
-
-- English
-- Croatian
+The initial interface language is English. Additional languages may be added only when their full user-facing flow is translated and tested.
 
 World assets should avoid baking language-specific text into textures wherever practical.
 

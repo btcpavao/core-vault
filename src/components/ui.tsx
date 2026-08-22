@@ -96,11 +96,11 @@ export function SecurityNotice({
 }
 
 export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: () => void }) {
-  const blocking = message.includes("STOP") || message.includes("isključivo Bitcoin Signet");
+  const blocking = message.includes("STOP") || message.includes("Bitcoin Signet only");
   return (
     <SecurityNotice level={blocking ? "danger" : "warning"} title={blocking ? "Security check stopped this step" : "This step was not completed"}>
       <p>{message}</p>
-      <p>{message.toLowerCase().includes("poslana") ? "The transaction was not broadcast." : "Existing wallets and funds were not changed by this failed step."}</p>
+      <p>{message.toLowerCase().includes("not broadcast") ? "The transaction was not broadcast." : "Existing wallets and funds were not changed by this failed step."}</p>
       {onRetry && <button className="button button-quiet inline-action" onClick={onRetry}>Try again</button>}
     </SecurityNotice>
   );

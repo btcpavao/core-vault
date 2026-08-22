@@ -89,4 +89,4 @@ Do not use the preservation option in CI. If `bitcoind` is not available, the ex
 
 Run `npm run dev` and open `http://localhost:1420`. The permanent demonstration ribbon must remain visible. No real RPC or wallet mutation is possible in this mode.
 
-Test at 1024×700 and 1280×800, with keyboard-only navigation, Croatian copy, muted audio, reduced motion, and a screen-reader navigation pass.
+Test at 1024×700 and 1280×800, with keyboard-only navigation, English copy, muted audio, reduced motion, and a screen-reader navigation pass.

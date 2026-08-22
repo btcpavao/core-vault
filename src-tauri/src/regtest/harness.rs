@@ -43,7 +43,7 @@ impl RegtestNode {
         if let Err(error) = fs::create_dir(&artifacts) {
             cleanup_after_setup_failure(&datadir, preserve_for_debug);
             return Err(format!(
-                "nije moguće izraditi testni artifact direktorij: {error}"
+                "could not create the test artifact directory: {error}"
             ));
         }
         if let Err(error) = assert_owned_datadir(&datadir) {
@@ -78,14 +78,14 @@ impl RegtestNode {
             Ok(file) => file,
             Err(error) => {
                 cleanup_after_setup_failure(&datadir, preserve_for_debug);
-                return Err(format!("nije moguće otvoriti testni stdout: {error}"));
+                return Err(format!("could not open the test stdout file: {error}"));
             }
         };
         let stderr = match File::create(&stderr_path) {
             Ok(file) => file,
             Err(error) => {
                 cleanup_after_setup_failure(&datadir, preserve_for_debug);
-                return Err(format!("nije moguće otvoriti testni stderr: {error}"));
+                return Err(format!("could not open the test stderr file: {error}"));
             }
         };
 
@@ -110,7 +110,7 @@ impl RegtestNode {
             .map_err(|error| {
                 cleanup_after_setup_failure(&datadir, preserve_for_debug);
                 format!(
-                    "bitcoind nije moguće pokrenuti iz {}: {error}",
+                    "could not start bitcoind from {}: {error}",
                     bitcoind.display()
                 )
             })?;
@@ -125,7 +125,7 @@ impl RegtestNode {
         };
 
         let deadline = Instant::now() + Duration::from_secs(30);
-        let mut last_error = "Bitcoin Core još nije izradio RPC cookie.".to_string();
+        let mut last_error = "Bitcoin Core has not created the RPC cookie yet.".to_string();
         loop {
             if let Some(status) = node
                 .child
@@ -134,7 +134,7 @@ impl RegtestNode {
                 .flatten()
             {
                 return Err(
-                    node.startup_error(format!("bitcoind je prerano završio sa statusom {status}"))
+                    node.startup_error(format!("bitcoind exited too early with status {status}"))
                 );
             }
 
@@ -155,7 +155,7 @@ impl RegtestNode {
 
             if Instant::now() >= deadline {
                 return Err(node.startup_error(format!(
-                    "isteklo je 30 sekundi čekanja na RPC readiness; zadnja pogreška: {last_error}"
+                    "timed out after 30 seconds while waiting for RPC readiness; last error: {last_error}"
                 )));
             }
             tokio::time::sleep(Duration::from_millis(75)).await;
@@ -188,7 +188,7 @@ impl RegtestNode {
                 "getblockchaininfo",
                 json!({}),
                 None,
-                "Testni harness potvrđuje Regtest prije mutacije.",
+                "The test harness confirms Regtest before mutation.",
                 None,
                 false,
                 &mut traces,
@@ -230,7 +230,7 @@ impl RegtestNode {
         .as_str()
         .filter(|address| !address.is_empty())
         .map(str::to_string)
-        .ok_or_else(|| "fixture wallet nije vratio novu adresu".to_string())
+        .ok_or_else(|| "the fixture wallet did not return a new address".to_string())
     }
 
     pub async fn mine_blocks(&self, count: u64, address: &str) -> Result<(), String> {
@@ -245,7 +245,7 @@ impl RegtestNode {
             .await?;
         if hashes.as_array().map(Vec::len) != Some(count as usize) {
             return Err(format!(
-                "generatetoaddress nije vratio očekivanih {count} blokova"
+                "generatetoaddress did not return the expected {count} blocks"
             ));
         }
         Ok(())
@@ -308,7 +308,9 @@ impl RegtestNode {
         .and_then(Value::as_str)
         .filter(|address| !address.is_empty())
         .map(str::to_string)
-        .ok_or_else(|| "fixture Core nije izveo očekivanu descriptor adresu".to_string())
+        .ok_or_else(|| {
+            "the Core fixture did not derive the expected descriptor address".to_string()
+        })
     }
 
     pub async fn address_info(&self, wallet_name: &str, address: &str) -> Result<Value, String> {
@@ -339,7 +341,7 @@ impl RegtestNode {
             .await?
             .get("version")
             .and_then(Value::as_u64)
-            .ok_or_else(|| "fixture Core nije vratio numeričku verziju".to_string())
+            .ok_or_else(|| "the Core fixture did not return a numeric version".to_string())
     }
 
     pub async fn decode_psbt(&self, psbt: &str) -> Result<Value, String> {
@@ -409,11 +411,13 @@ impl RegtestNode {
 
         if let Err(error) = stop_result {
             return Err(format!(
-                "graceful bitcoind shutdown nije uspio; child je zaustavljen: {error}"
+                "graceful bitcoind shutdown failed; the child process was stopped: {error}"
             ));
         }
         if !graceful {
-            return Err("bitcoind se nije ugasio unutar 10 sekundi; child je prekinut".into());
+            return Err(
+                "bitcoind did not stop within 10 seconds; the child process was terminated".into(),
+            );
         }
         Ok(ShutdownReport {
             graceful,
@@ -514,7 +518,7 @@ fn discover_bitcoind() -> Result<PathBuf, String> {
     if let Some(value) = env::var_os("BITCOIND") {
         let path = PathBuf::from(value);
         if !path.is_absolute() {
-            return Err("BITCOIND mora biti apsolutna putanja do bitcoind executablea.".into());
+            return Err("BITCOIND must be an absolute path to the bitcoind executable.".into());
         }
         if !path.is_file() {
             return Err(format!(
@@ -540,7 +544,7 @@ fn discover_bitcoind() -> Result<PathBuf, String> {
     }
 
     Err(
-        "bitcoind nije pronađen u PATH-u. Instalirajte Bitcoin Core ili pokrenite BITCOIND=/apsolutna/putanja/do/bitcoind npm run test:regtest."
+        "bitcoind was not found in PATH. Install Bitcoin Core or run BITCOIND=/absolute/path/to/bitcoind npm run test:regtest."
             .into(),
     )
 }
@@ -560,19 +564,19 @@ fn create_owned_datadir() -> Result<PathBuf, String> {
             Ok(()) => {
                 if let Err(error) = fs::write(candidate.join(OWNERSHIP_MARKER), OWNERSHIP_VALUE) {
                     let _ = fs::remove_dir_all(&candidate);
-                    return Err(format!("nije moguće označiti testni datadir: {error}"));
+                    return Err(format!("could not mark the test data directory: {error}"));
                 }
                 return Ok(candidate);
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
                 return Err(format!(
-                    "nije moguće izraditi privremeni Regtest datadir: {error}"
+                    "could not create a temporary Regtest data directory: {error}"
                 ))
             }
         }
     }
-    Err("nije moguće izraditi jedinstveni privremeni Regtest datadir".into())
+    Err("could not create a unique temporary Regtest data directory".into())
 }
 
 fn assert_owned_datadir(path: &Path) -> Result<(), String> {
@@ -582,15 +586,18 @@ fn assert_owned_datadir(path: &Path) -> Result<(), String> {
         .is_some_and(|name| name.starts_with(DATADIR_PREFIX));
     let marker = fs::read_to_string(path.join(OWNERSHIP_MARKER)).unwrap_or_default();
     if !has_prefix || marker != OWNERSHIP_VALUE {
-        return Err("STOP: harness odbija rad nad direktorijem koji nije sam izradio.".into());
+        return Err(
+            "STOP: The harness refuses to operate on a directory it did not create.".into(),
+        );
     }
     Ok(())
 }
 
 fn cleanup_owned_datadir(path: &Path) -> Result<(), String> {
     assert_owned_datadir(path)?;
-    fs::remove_dir_all(path)
-        .map_err(|error| format!("nije moguće očistiti privremeni Regtest datadir: {error}"))
+    fs::remove_dir_all(path).map_err(|error| {
+        format!("could not clean up the temporary Regtest data directory: {error}")
+    })
 }
 
 fn cleanup_after_setup_failure(path: &Path, preserve_for_debug: bool) {
@@ -603,11 +610,11 @@ fn cleanup_after_setup_failure(path: &Path, preserve_for_debug: bool) {
 
 fn available_loopback_port() -> Result<u16, String> {
     let listener = TcpListener::bind(("127.0.0.1", 0))
-        .map_err(|error| format!("nije moguće rezervirati testni loopback port: {error}"))?;
+        .map_err(|error| format!("could not reserve a test loopback port: {error}"))?;
     listener
         .local_addr()
         .map(|address| address.port())
-        .map_err(|error| format!("nije moguće pročitati testni loopback port: {error}"))
+        .map_err(|error| format!("could not read the test loopback port: {error}"))
 }
 
 fn loopback_port_is_ready(port: u16) -> bool {

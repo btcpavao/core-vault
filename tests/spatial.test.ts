@@ -35,10 +35,8 @@ describe("spatial product contract", () => {
     expect(demoVaultItem.vaultType).toContain("Backup required");
   });
 
-  it("ships English and Croatian core navigation copy", () => {
+  it("ships English core navigation copy", () => {
     expect(t("en", "mainHall")).toBe("Main Hall");
-    expect(t("hr", "mainHall")).toBe("Glavna dvorana");
-    expect(t("hr", "communications")).toBe("Komunikacije");
   });
 });
 

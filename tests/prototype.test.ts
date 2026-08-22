@@ -51,7 +51,7 @@ describe("safe, representative demo", () => {
 
   it("labels the demo as disconnected from a real Bitcoin Core", () => {
     const app = projectFile("src/App.tsx");
-    expect(app).toContain("DEMO MODE — NO REAL BITCOIN CORE");
+    expect(app).toContain("DEMO MODE. NO REAL BITCOIN CORE");
     expect(demoCoreStatus.data.connected).toBe(false);
     expect(demoCoreStatus.data.supported).toBe(false);
     expect(demoCoreStatus.data.message).toMatch(/No Bitcoin Core connection/i);

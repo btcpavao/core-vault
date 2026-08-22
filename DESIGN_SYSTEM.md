@@ -1,26 +1,22 @@
-# Core Vault UI — design system V1 i prostorni V2 sloj
+# Core Vault UI V1 design system and spatial V2 layer
 
-> Izvorni V1 sustav u nastavku ostaje dokumentiran zbog očuvanog 2-od-3 tijeka. Aktivni prostorni shell koristi V2 sustav opisan u [docs/WORLD_ART_DIRECTION.md](docs/WORLD_ART_DIRECTION.md). V2 ne mijenja sigurnosne invarijante, RPC granice ni semantiku kontrola.
+> The original V1 system remains documented because the 2-of-3 flow is still part of the application. The active spatial shell uses the V2 system in [docs/WORLD_ART_DIRECTION.md](docs/WORLD_ART_DIRECTION.md). V2 does not change security invariants, RPC boundaries, or control semantics.
 
-Design system prevodi nalaze iz `DESIGN_RESEARCH.md` u vlastiti, auditabilan vizualni i
-interakcijski jezik. Ne kopira Bitcoin Design layout, ilustracije, tekstove ni komponente.
+This system turns the findings in `DESIGN_RESEARCH.md` into an original, auditable visual and interaction language. It does not copy Bitcoin Design layouts, illustrations, text, or components.
 
-## Temeljni osjećaj
+## Intended character
 
-- tih, pouzdan i financijski ozbiljan
-- topao, ali bez dekorativne razigranosti
-- Bitcoin-specifičan kroz mentalne modele, ne kroz “crypto” estetiku
-- tehnički detaljan tek na zahtjev
-- default stanje privatno i local-only
+- quiet, trustworthy, and financially serious
+- warm without decorative playfulness
+- specific to Bitcoin through mental models, not a generic crypto aesthetic
+- technically detailed only when requested
+- private and local-only by default
 
-V1 tijek nema trading elemente, tržišne cijene ni coin animacije. Prostorni V2 sloj koristi
-plavu i zlatnu energiju samo kao čitljiv prikaz lokalnih podataka, ključeva, kanala ili aktivnog
-artefakta. Referentne slike su lokalno optimizirani build asseti; aplikacija ih ne dohvaća s mreže.
+The V1 flow has no trading widgets, market prices, or coin animations. Spatial V2 uses blue and gold energy only to represent local data, keys, channels, or an active artifact. Reference images are optimized local build assets and are never fetched at runtime.
 
-## Centralizirani tokeni
+## Centralized tokens
 
-Sve vrijednosti žive kao CSS custom properties u `:root`; komponente ne uvode proizvoljne
-boje, razmake ili radijuse.
+All values live in `:root` CSS custom properties. Components do not introduce arbitrary colors, spacing, or radii.
 
 ```css
 :root {
@@ -83,173 +79,94 @@ boje, razmake ili radijuse.
 
 ## Typography
 
-- System sans font izbjegava mrežni font zahtjev i prirodno izgleda na macOS-u, Windowsu
-  i Linuxu. Root koristi antialiased smoothing.
-- `h1` je 42/46, `h2` 30/36, `h3` 22/28, body 16/25, supporting text 14/21.
-- Heading koristi `text-wrap: balance`; kratki body `text-wrap: pretty`.
-- Iznosi, balance i fee koriste tabularne brojke. Address, fingerprint, descriptor i RPC
-  koriste mono font, ali nikad za plain-language objašnjenje.
-- Iznos ima snažnu hijerarhiju, jedinica je uz broj i screen reader dobiva cijeli izraz.
+- A system sans font avoids a network font request and looks native on macOS, Windows, and Linux. The root uses antialiased smoothing.
+- `h1` is 42/46, `h2` 30/36, `h3` 22/28, body 16/25, and supporting text 14/21.
+- Headings use `text-wrap: balance`; short body copy uses `text-wrap: pretty`.
+- Amounts, balances, and fees use tabular numerals. Addresses, fingerprints, descriptors, and RPC data use monospace. Plain-language explanations never do.
+- Amounts have strong hierarchy, the unit sits beside the number, and screen readers receive the full expression.
 
-## Layout i spacing
+## Layout and spacing
 
-- Desktop shell: 248 px sidebar + fleksibilni sadržaj, maksimalno 880 px za aktivni wizard.
-- Ekran je jedna semantička `main` regija; sadržaj ima 40–64 px zračnosti.
-- Forma ima vertikalni ritam 16 px, povezane kontrole 8 px, sekcije 32 px.
-- Na uskim prozorima sidebar postaje vodoravni progress strip; sadržaj ostaje u prirodnom
-  redoslijedu bez horizontalnog skrolanja.
-- Setup je linearan. Aktivni ekran ima jedan vizualno dominantan primary CTA.
+- The desktop shell has a 248 px sidebar and flexible content, with an 880 px maximum width for the active wizard.
+- The screen has one semantic `main` region and 40 to 64 px of space around content.
+- Forms use a 16 px vertical rhythm, related controls use 8 px, and sections use 32 px.
+- In narrow windows, the sidebar becomes a horizontal progress strip. Content keeps its natural order without horizontal scrolling.
+- Setup is linear. Each active screen has one visually dominant primary CTA.
 
-## Surfaces i border radius
+## Surfaces and radii
 
-- Card koristi `--radius-lg` i `--shadow-card`, bez teških obruba.
-- Ugniježđeni panel s 8 px paddinga koristi radijus za 8 px manji od roditelja
-  (`16 → 8`, `24 → 16`) kako bi radijusi bili koncentrični.
-- Input zadržava 1 px outline jer je njegov obrub funkcionalan za pristupačnost.
-- Separatori ostaju tanke linije; shadow se koristi samo za dubinu površina.
+- Cards use `--radius-lg` and `--shadow-card` without heavy borders.
+- A nested panel with 8 px padding uses a radius 8 px smaller than its parent so the curves stay concentric.
+- Inputs retain a 1 px outline because their border is functional for accessibility.
+- Separators are thin lines. Shadows communicate surface depth only.
 
-## Ikone
+## Icons and semantic color
 
-- Lucide line icons, najčešće 18 ili 20 px, stroke 1.75.
-- Ikona nikada nije jedini status ili jedina oznaka kontrole.
-- Funds: wallet/circle; signing wallet: key; vault/policy: shield/lock; coordinator:
-  eye/file-search bez key simbola.
-- Status koristi ikonu + riječ: `Check + Ready`, `AlertTriangle + Needs attention`,
-  `XCircle + Blocked`.
-- Dekorativne ikone imaju `aria-hidden`; icon-only button mora imati `aria-label` i 44 px hit area.
+- Use Lucide line icons at 18 or 20 px with a 1.75 stroke.
+- An icon is never the only status or control label. Decorative icons use `aria-hidden`; icon-only buttons have an `aria-label` and 44 px hit area.
+- Wallet or circle represents funds, key represents a signer, shield or lock represents vault policy, and eye or file-search represents the keyless coordinator.
+- Status combines icon, word, and color. Orange marks the primary action, not bitcoin value.
+- Success, warning, danger, and information states always include an icon, title, and text.
+- Signet has a persistent neutral blue `Test network · No real bitcoin` label. Mainnet uses a danger surface, a clear STOP title, and disabled mutations.
+- Text and controls target WCAG AA. Muted text is never smaller than 14 px.
 
-## Boje i semantička stanja
+## Controls
 
-- Accent narančasta označava primarnu radnju, ne “vrijednost bitcoina”.
-- Success, warning, danger i info uvijek dolaze s ikonom, naslovom i tekstom.
-- Signet ima trajnu neutralno-plavu oznaku `Test network · No real bitcoin`.
-- Blocking Mainnet stanje koristi danger surface, jasan STOP naslov i onemogućene mutacije.
-- Kontrast teksta i kontrole cilja WCAG AA; muted tekst se ne koristi ispod 14 px.
-
-## Buttons
-
-| Tip | Namjena | Pravila |
+| Type | Purpose | Rule |
 | --- | --- | --- |
-| Primary | jedina sljedeća glavna radnja | 48 px visina, accent fill, minimalno 44 px hit area |
-| Secondary | korisna, ali ne dominantna radnja | surface fill + shadow ring |
-| Quiet | Advanced, cancel, reveal | transparentno, vidljiv hover/focus |
-| Danger | nepovratna ili sigurnosno kritična radnja | danger fill; nikada za običnu navigaciju |
+| Primary | the one main next action | 48 px high, accent fill, at least 44 px hit area |
+| Secondary | useful but non-dominant action | surface fill and shadow ring |
+| Quiet | advanced, cancel, reveal | transparent with visible hover and focus |
+| Danger | irreversible or security-critical action | danger fill, never routine navigation |
 
-Buttons koriste `scale(0.96)` na press, a prijelazi navode samo `scale`, `background-color`,
-`box-shadow` ili `color`; nema `transition: all`. Disabled stanje zadržava čitljiv label i
-objašnjenje izvan gumba zašto je nedostupno.
+Buttons use `scale(0.96)` on press. Transitions name only `scale`, `background-color`, `box-shadow`, or `color`; never use `transition: all`. Disabled buttons keep a readable label, with the reason shown outside the control.
 
-## Inputs
+Inputs keep a visible label above the field. They are 48 px high, use a 10 px radius and 3 px focus ring, and explain both what is wrong and how to fix it. Password inputs are uncontrolled, have a show or hide control, state that the value goes only to local Bitcoin Core, and clear after the call. Address and path values use monospace.
 
-- Label je iznad inputa i ostaje vidljiv; placeholder nije label.
-- Visina 48 px, radius 10 px, focus ring 3 px.
-- Password input je uncontrolled, ima show/hide kontrolu i opis “šalje se samo lokalnom
-  Bitcoin Coreu”; briše se nakon poziva.
-- Address i path polja koriste mono font tek za vrijednost.
-- Inline validacija govori što nije u redu i kako popraviti, ne samo “invalid”.
+## Core components
 
-## Cards
+**Signer card.** Shows `K1` and a friendly name such as `Signing wallet 1`, one current task, and a word-and-icon status list. Fingerprints and tpubs remain in Advanced.
 
-### Signer card
+**Transaction review card.** Separates amount, destination, network fee, remaining balance, and required approvals. The full address is selectable and copyable only in receive and review contexts. Editing after the first signature creates a new draft.
 
-- sadrži `K1` i prijateljski naziv `Signing wallet 1`
-- prikazuje točno jedan aktualni zadatak: create, encrypt, backup ili ready
-- status lista koristi riječi i ikone (`Wallet created`, `Encrypted`, `Backup created`)
-- fingerprint/tpub nisu vidljivi dok korisnik ne otvori Advanced
+**Trust facts card.** Shows verifiable facts about the local connection, Signet, absence of remote servers, disabled telemetry, and Core-managed keys. Every item comes from a backend check or a static architectural invariant.
 
-### Transaction review card
-
-- odvojene cjeline: `You are sending`, `To`, `Network fee`, `Remaining in vault`,
-  `Required approvals`
-- puna adresa je dostupna, user-selectable i kopirljiva samo u receive/review kontekstu
-- edit se radi prije signature faze; nakon prvog potpisa promjena stvara novi draft
-
-### Trust facts card
-
-- prikazuje provjerljive činjenice: local connection, Signet, no remote server, telemetry off,
-  keys handled by Core
-- status nije marketinška tvrdnja nego rezultat backend provjere ili statički arhitekturni invariant
-
-## Vault diagram
-
-Tri signer čvora stoje lijevo/gore, policy čvor `2 of 3` u sredini, vault desno/dolje.
-Linije prikazuju odnos, ne protok privatnih ključeva. Coordinator je zaseban watch-only
-čvor ispod policyja. U signing stanju čvorovi prikazuju signed/pending tekst i ikonu.
-Dijagram ima ekvivalentan screen-reader opis u DOM-u.
+**Vault diagram.** Three signer nodes connect to a central `2 of 3` policy and then to the vault. Lines show relationships, not private-key movement. The watch-only coordinator is a separate node below the policy. Signed and pending states include text and icons. The DOM contains an equivalent screen-reader description.
 
 ## Advanced technical panel
 
-- Native `details/summary` gdje je moguće: keyboard i screen-reader ponašanje bez custom modala.
-- Summary: `Show what Bitcoin Core is doing`.
-- Otvoreni panel: plain-language objašnjenje, RPC method, wallet scope, redigirani argumenti,
-  redigirani rezultat, trajanje.
-- Passphrase, cookie, PSBT i raw hex nikada se ne prikazuju; panel kaže da je payload skriven.
-- Descriptor/tpub/fingerprint prikaz označen je kao `Sensitive wallet metadata`.
+- Prefer native `details` and `summary` for built-in keyboard and screen-reader behavior.
+- The summary reads `Show what Bitcoin Core is doing`.
+- The expanded panel shows a plain explanation, RPC method, wallet scope, redacted arguments and result, and duration.
+- It never displays a passphrase, cookie, PSBT, or raw hex, and explicitly says when a payload is hidden.
+- Descriptor, tpub, and fingerprint output is labeled `Sensitive wallet metadata`.
 
-## Warnings i security messages
+## Messages, privacy, and dialogs
 
-Svaka poruka odgovara na:
+Every warning states what happened or will happen, whether funds are safe or a transaction was sent, and what the user should do next. Information explains a concept, caution asks for attention, and blocking messages stop the flow without a bypass.
 
-1. što se dogodilo ili što će se dogoditi
-2. jesu li sredstva sigurna / je li transakcija poslana
-3. što korisnik radi sljedeće
+The balance is hidden after reload. Addresses appear only during receive and transaction review. Descriptors, tpubs, and fingerprints appear only in Advanced or an explicit export. Before saving a public configuration, Core Vault explains that it cannot spend but can track the wallet. The application makes no automatic explorer, exchange-rate, or other external request.
 
-`Info` objašnjava koncept; `Caution` traži pažnju; `Blocking` zaustavlja flow. Blocking
-poruka nema “continue anyway”. Kritična odluka koristi razumljiv sažetak i CTA, ne
-legalistički checkbox.
+Prefer inline confirmation when the entire context need not be blocked. A modal is reserved for critical review or help and has a title, description, one primary action, one cancel action, correct dialog semantics, initial focus, and focus restoration. Tauri supplies OS file dialogs. Cancellation is neutral, not an error.
 
-## Privacy controls
+## Loading, errors, and motion
 
-- Balance je skriven defaultom nakon reload-a i ima `Show/Hide balance` kontrolu.
-- Address se prikazuje samo u receive i transaction review kontekstu.
-- Descriptor, tpub i fingerprint pojavljuju se samo u Advanced ili eksplicitnom exportu.
-- Public config export prije save dijaloga objašnjava: ne može potrošiti, može pratiti wallet.
-- Nema automatskih external linkova, exchange-rate zahtjeva ili explorera.
+- A loading control keeps its label, such as `Creating K1…`, and reports status through `aria-live="polite"`. A spinner is never the only information, and Core Vault does not invent progress percentages.
+- Empty states say what the user will get and offer one action.
+- Recoverable errors preserve state and offer a retry or settings route. Validation errors reject before mutation and focus the relevant field. Security errors block without override. Transaction errors confirm that nothing was broadcast and name the next step.
+- Raw RPC errors appear only in Advanced and never repeat a secret.
+- Interactive transitions last 120 to 180 ms and can be interrupted. New wizard content may use a small opacity and 8 px vertical entrance. Motion never communicates a critical state.
+- Reduced-motion mode removes decorative transitions and press scaling. Never use `transition: all` or speculative `will-change`.
 
-## Dialogs
+## Accessibility definition of done
 
-- Preferira se inline potvrda kada ne zahtijeva blokiranje cijelog konteksta.
-- Modal se koristi samo za kritični review ili pomoć; ima naslov, opis, jedan primary i
-  jedan cancel, `role="dialog"`, `aria-modal`, početni fokus i vraćanje fokusa pozivatelju.
-- OS file dialog koristi Tauri za backup/export; cancellation je neutralno stanje, ne error.
-
-## Loading i empty states
-
-- Loading control zadržava label (`Creating K1…`) i ima `aria-live="polite"` status.
-- Spinner nije jedina informacija; operacija nema lažni progress postotak.
-- Empty state govori što će korisnik dobiti i nudi jednu radnju.
-- U `prefers-reduced-motion: reduce` nestaju dekorativni prijelazi i press scale.
-
-## Error states
-
-| Razina | Primjer | Ponašanje |
-| --- | --- | --- |
-| Recoverable | Core nije pokrenut, user cancel file dialog | čuva state, nudi Retry/Open settings |
-| Data validation | remote host, pogrešan wallet, invalid address | odbija prije mutacije i fokusira polje |
-| Blocking security | Mainnet, private descriptor, coordinator ima private keys | STOP surface, mutacije disabled, bez overridea |
-| Transaction | insufficient funds/signatures, locked signer | potvrđuje da nije broadcastano, pokazuje konkretan sljedeći korak |
-
-Izvorni RPC error pojavljuje se samo u Advanced dijelu poruke. Error tekst nikada ne
-ponavlja passphrase, cookie, PSBT ili raw hex.
-
-## Motion
-
-- Interaktivna stanja koriste interruptible CSS transitions od 120–180 ms.
-- Novi wizard sadržaj može ući s blagim `opacity + translateY(8px)` staggerom; ne animira
-  se cijeli prozor niti se motion koristi za kritični status.
-- Context icon swap koristi `scale 0.25 → 1`, `opacity 0 → 1`, `blur 4px → 0` s
-  `cubic-bezier(0.2, 0, 0, 1)` jer nema motion dependencyja.
-- Nema `transition: all` ni preventivnog `will-change`.
-
-## Accessibility Definition of Done
-
-- sve funkcije dostupne tipkovnicom, logičan DOM/tab redoslijed
-- vidljiv 3 px focus ring i skip link
-- 44 × 44 px minimalna interaktivna površina
-- status ima ikonu + tekst + boju
-- inputi imaju label, description i error vezan preko `aria-describedby`
-- dinamički statusi koriste `aria-live`, bez preglasnog ponavljanja
-- layout radi na 200% zoomu i s većim system fontom
-- screen reader može razumjeti vault dijagram i signer napredak bez vizuala
-- `prefers-reduced-motion` se poštuje
-- contrast se provjerava na svim semantičkim površinama
+- Every function works with a keyboard and follows logical DOM and tab order.
+- Focus has a visible 3 px ring, and a skip link is present.
+- Interactive surfaces are at least 44 by 44 px.
+- Status always combines an icon, text, and color.
+- Inputs connect labels, descriptions, and errors through `aria-describedby`.
+- Dynamic status uses `aria-live` without noisy repetition.
+- Layout works at 200% zoom and with a larger system font.
+- A screen reader can understand the vault diagram and signer progress without the visual.
+- `prefers-reduced-motion` is respected.
+- Every semantic surface passes contrast checks.

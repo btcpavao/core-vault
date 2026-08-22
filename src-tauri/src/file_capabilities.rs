@@ -11,7 +11,7 @@ use std::{
 use tauri::api::dialog::blocking::FileDialogBuilder;
 
 const CAPABILITY_TTL: Duration = Duration::from_secs(5 * 60);
-const AUTHORIZATION_ERROR: &str = "Odabrana lokacija više nije autorizirana. Ponovno je odaberite.";
+const AUTHORIZATION_ERROR: &str = "The selected location is no longer authorized. Select it again.";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileOperation {
@@ -64,7 +64,7 @@ impl FileCapabilityStore {
 
         let mut random = [0_u8; 32];
         getrandom::getrandom(&mut random)
-            .map_err(|_| "Nije moguće stvoriti sigurnu ovlast za datoteku.".to_string())?;
+            .map_err(|_| "Could not create a secure file authorization.".to_string())?;
         let capability_id = random.iter().fold(
             String::with_capacity(random.len() * 2),
             |mut output, byte| {
@@ -76,7 +76,7 @@ impl FileCapabilityStore {
         let display_name = path
             .file_name()
             .and_then(|value| value.to_str())
-            .unwrap_or("Odabrana datoteka")
+            .unwrap_or("Selected file")
             .to_string();
 
         self.active.insert(
@@ -126,7 +126,7 @@ pub fn consume_file_capability(
     state
         .file_capabilities
         .lock()
-        .map_err(|_| "Ovlasti za datoteke trenutačno nisu dostupne.".to_string())?
+        .map_err(|_| "File authorizations are currently unavailable.".to_string())?
         .consume(capability_id, operation)
 }
 
@@ -135,7 +135,7 @@ pub fn choose_personal_backup_destination(
     wallet_name: &str,
 ) -> Result<Option<FileCapabilityGrant>, String> {
     validate_wallet_name(wallet_name)?;
-    let title = format!("Sigurnosna kopija walleta {wallet_name}");
+    let title = format!("Wallet backup for {wallet_name}");
     let file_name = format!("CoreVault-{wallet_name}.dat");
     let selected = FileDialogBuilder::new()
         .set_title(&title)
@@ -160,7 +160,7 @@ pub fn choose_signer_backup_destination(
     wallet_name: &str,
 ) -> Result<Option<FileCapabilityGrant>, String> {
     validate_wallet_name(wallet_name)?;
-    let title = format!("Sigurnosna kopija signing walleta {wallet_name}");
+    let title = format!("Signing-wallet backup for {wallet_name}");
     let file_name = format!("CoreVault-{wallet_name}.dat");
     let selected = FileDialogBuilder::new()
         .set_title(&title)
@@ -196,7 +196,7 @@ fn issue_selection(
     let grant = state
         .file_capabilities
         .lock()
-        .map_err(|_| "Ovlasti za datoteke trenutačno nisu dostupne.".to_string())?
+        .map_err(|_| "File authorizations are currently unavailable.".to_string())?
         .issue(path, operation)?;
     Ok(Some(grant))
 }
@@ -218,25 +218,25 @@ fn normalize_new_destination(path: &Path, extension: &str) -> Result<PathBuf, St
     validate_extension(path, extension)?;
     let file_name = path
         .file_name()
-        .ok_or_else(|| "Odredište mora sadržavati naziv datoteke.".to_string())?;
+        .ok_or_else(|| "The destination must include a file name.".to_string())?;
     let parent = path
         .parent()
-        .ok_or_else(|| "Odredišni direktorij nije valjan.".to_string())?
+        .ok_or_else(|| "The destination directory is invalid.".to_string())?
         .canonicalize()
-        .map_err(|_| "Odredišni direktorij ne postoji ili nije dostupan.".to_string())?;
+        .map_err(|_| "The destination directory does not exist or is unavailable.".to_string())?;
     if !parent.is_dir() {
-        return Err("Odredišni direktorij nije valjan.".into());
+        return Err("The destination directory is invalid.".into());
     }
     let normalized = parent.join(file_name);
     match fs::symlink_metadata(&normalized) {
         Ok(_) => {
             return Err(
-                "Odabrana datoteka već postoji. Odaberite novi naziv; prepisivanje nije dopušteno."
+                "The selected file already exists. Choose a new name. Overwriting is not allowed."
                     .into(),
             )
         }
         Err(error) if error.kind() == ErrorKind::NotFound => {}
-        Err(_) => return Err("Odredište nije moguće sigurno provjeriti.".into()),
+        Err(_) => return Err("Could not verify the destination safely.".into()),
     }
     Ok(normalized)
 }
@@ -248,12 +248,12 @@ fn normalize_existing_file(path: &Path, extension: &str) -> Result<PathBuf, Stri
     validate_extension(path, extension)?;
     let normalized = path
         .canonicalize()
-        .map_err(|_| "Odabrana backup datoteka ne postoji ili nije dostupna.".to_string())?;
+        .map_err(|_| "The selected backup file does not exist or is unavailable.".to_string())?;
     if !fs::metadata(&normalized)
         .map(|metadata| metadata.is_file())
         .unwrap_or(false)
     {
-        return Err("Odabrani backup nije regularna datoteka.".into());
+        return Err("The selected backup is not a regular file.".into());
     }
     Ok(normalized)
 }
@@ -268,7 +268,7 @@ fn validate_extension(path: &Path, expected: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!(
-            "Odabrana datoteka mora imati .{expected} nastavak."
+            "The selected file must use the .{expected} extension."
         ))
     }
 }
@@ -282,7 +282,7 @@ pub(crate) fn issue_test_capability(
     state
         .file_capabilities
         .lock()
-        .map_err(|_| "Ovlasti za datoteke trenutačno nisu dostupne.".to_string())?
+        .map_err(|_| "File authorizations are currently unavailable.".to_string())?
         .issue(path, operation)
         .map(|grant| grant.capability_id)
 }

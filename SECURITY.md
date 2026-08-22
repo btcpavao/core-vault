@@ -1,59 +1,47 @@
-# Sigurnosni ustav Core Vault UI-ja
+# Core Vault UI security charter
 
-> Ovaj dokument opisuje sačuvani 2-od-3 Signet prototip. Aktualni sigurnosni ugovor prostorne verzije i Personal Vaulta nalazi se u [docs/SECURITY_THREAT_MODEL.md](docs/SECURITY_THREAT_MODEL.md).
+> This document describes the preserved 2-of-3 Signet prototype. The current security contract for the spatial version and Personal Vault is in [docs/SECURITY_THREAT_MODEL.md](docs/SECURITY_THREAT_MODEL.md).
 
-Core Vault UI je lokalni grafički sloj iznad Bitcoin Corea. Bitcoin Core je jedini izvor
-istine i jedina komponenta koja generira ili koristi privatne ključeve.
+Core Vault UI is a local graphical layer over Bitcoin Core. Bitcoin Core is the only source of truth and the only component that generates or uses private keys.
 
-## Aplikacija nikada ne smije
+## The application must never
 
-- generirati, čitati, izvoziti ili spremati privatne ključeve
-- tražiti seed phrase, WIF, xprv ili tprv
-- implementirati kriptografiju, signing engine ili descriptor checksum
-- slati Bitcoin podatke, credentiale ili telemetriju na mrežni servis
-- koristiti cloud backend, account, analytics, remote signer, Electrum ili remote Core
-- omogućiti Mainnet u V1
+- generate, read, export, or store private keys
+- request a seed phrase, WIF, xprv, or tprv
+- implement cryptography, a signing engine, or descriptor checksums
+- send Bitcoin data, credentials, or telemetry to a network service
+- use a cloud backend, account, analytics, remote signer, Electrum server, or remote Core node
+- enable Mainnet in V1
 
-## Tehnički enforceane kontrole
+## Enforced technical controls
 
-- RPC host mora biti loopback (`127.0.0.1`, `localhost` ili `::1`).
-- `getblockchaininfo.chain` mora biti `signet` prije bilo koje wallet mutacije.
-- Signing wallet mora imati `descriptors=true` i `private_keys_enabled=true`.
-- Coordinator mora imati `descriptors=true` i `private_keys_enabled=false` prije importa.
-- `listdescriptors` se poziva s `private=false`; private-key uzorak odmah prekida tijek.
-- Receive/change descriptori moraju biti javni `wpkh`, ranged `/0/*` i `/1/*` parovi.
-- K1/K2/K3 moraju imati različite master fingerprinte i tpubove.
-- `getdescriptorinfo` mora potvrditi `isrange`, `issolvable` i `hasprivatekeys=false`.
-- Oba `importdescriptors` rezultata moraju imati `success=true`.
-- Public backup prije zapisa prolazi ponovni backend secret scan.
-- PSBT i raw transaction postoje samo u memoriji procesa; UI ih ne persistira niti traži ručni copy/paste.
-- Enkriptirani signer otključava se na najviše pet sekundi i backend nakon pokušaja uvijek poziva `walletlock`.
+- The RPC host must be loopback (`127.0.0.1`, `localhost`, or `::1`).
+- `getblockchaininfo.chain` must report `signet` before any wallet mutation.
+- A signing wallet must have `descriptors=true` and `private_keys_enabled=true`.
+- The coordinator must have `descriptors=true` and `private_keys_enabled=false` before import.
+- Core Vault calls `listdescriptors` with `private=false`. A private-key pattern stops the flow immediately.
+- Receive and change descriptors must be a public `wpkh` ranged pair using `/0/*` and `/1/*`.
+- K1, K2, and K3 must have different master fingerprints and tpubs.
+- `getdescriptorinfo` must confirm `isrange`, `issolvable`, and `hasprivatekeys=false`.
+- Both `importdescriptors` results must have `success=true`.
+- The backend scans the public backup for secrets again before writing it.
+- PSBT and raw transaction data exist only in process memory. The UI does not persist them or ask the user to copy and paste them.
+- An encrypted signer unlocks for no more than five seconds. The backend always calls `walletlock` after the attempt.
 
-## Tajne
+## Secrets
 
-Bitcoin Core cookie čita samo Rust sloj i ne izlaže ga Reactu. Wallet passphrase šalje se
-samo lokalnom Core RPC-u, nikada se ne upisuje u trace ili error poruku i briše se iz
-frontend inputa odmah po dovršetku poziva. Zbog kopija koje mogu nastati u OS-u, Tauri
-IPC-u i HTTP biblioteci nije moguće obećati savršeno brisanje svake memorijske kopije;
-V1 smanjuje trajanje i broj kopija te taj podatak nikada ne persistira.
+Only the Rust layer reads the Bitcoin Core cookie, and it never exposes the cookie to React. A wallet passphrase goes only to the local Core RPC. Core Vault never writes it to a trace or error message and clears it from the frontend input as soon as the call finishes.
 
-## Lokalni filesystem
+The operating system, Tauri IPC, and HTTP library may create memory copies, so V1 cannot promise perfect deletion of every copy. It limits their number and lifetime and never persists the passphrase.
 
-Signing-wallet backup izrađuje Bitcoin Core putem `backupwallet`; aplikacija bira samo
-apsolutnu ciljnu putanju i potvrđuje da je datoteka nastala. Public vault backup sadrži
-isključivo schema verziju, Signet policy, javne fingerprinte/tpubove, checksummed receive
-i change descriptore te coordinator metadata.
+## Local filesystem
 
-## Poznate granice
+Bitcoin Core creates signing-wallet backups through `backupwallet`. The application selects an absolute destination path and confirms that the file exists. The public vault backup contains only the schema version, Signet policy, public fingerprints and tpubs, checksummed receive and change descriptors, and coordinator metadata.
 
-V1 ne štiti kompromitiran OS, Bitcoin Core instalaciju ili korisnički odabranu backup
-lokaciju. `tpub` sam po sebi ne razlikuje Signet od Testneta, zato se mreža uvijek provjerava
-izravno kroz lokalni `getblockchaininfo`, a descriptor obrada nije dostupna bez te provjere.
+## Known limits
 
-Kreiranje i enkripcija signing walleta u V1 su dva odvojena, blokirajuća wizard koraka.
-Naglo gašenje aplikacije između njih može ostaviti lokalni Signet wallet neenkriptiranim;
-zato se ovaj prototip ne koristi za stvarni bitcoin. Prije Mainnet dizajna ta dva koraka
-moraju postati jedna atomska Core operacija ili dobiti siguran resumable recovery flow.
+V1 does not protect a compromised operating system, Bitcoin Core installation, or user-selected backup location. A `tpub` does not distinguish Signet from Testnet, so Core Vault always checks the network directly through local `getblockchaininfo`. Descriptor processing is unavailable until that check passes.
 
-Sigurnosne probleme prijavite sa sintetičkim Signet podacima. Nikada ne prilažite wallet
-datoteke, seed, private key, passphrase ili stvarni PSBT.
+V1 creates and encrypts a signing wallet in two separate blocking wizard steps. Closing the application between them may leave a local Signet wallet unencrypted. Do not use this prototype with real bitcoin. A Mainnet design would need one atomic Core operation or a safe, resumable recovery flow.
+
+Report security problems with synthetic Signet data. Never attach wallet files, seeds, private keys, passphrases, or real PSBTs.

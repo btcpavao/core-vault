@@ -8,7 +8,7 @@ use tauri::{api::dialog::blocking::ask, Window, Wry};
 
 const AUTHORIZATION_TTL: Duration = Duration::from_secs(3 * 60);
 const AUTHORIZATION_ERROR: &str =
-    "Broadcast autorizacija nije valjana, istekla je ili je već iskorištena. Ponovno potvrdite broadcast.";
+    "The broadcast authorization is invalid, expired, or already used. Confirm the broadcast again.";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BroadcastPurpose {
@@ -111,7 +111,7 @@ impl BroadcastAuthorizationStore {
 
         let mut random = [0_u8; 32];
         getrandom::getrandom(&mut random)
-            .map_err(|_| "Nije moguće stvoriti sigurnu broadcast autorizaciju.".to_string())?;
+            .map_err(|_| "Could not create a secure broadcast authorization.".to_string())?;
         let authorization_id = random.iter().fold(
             String::with_capacity(random.len() * 2),
             |mut output, byte| {

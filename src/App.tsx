@@ -442,7 +442,7 @@ function App() {
           <div className="network-badge"><span />{demoMode ? "Simulated Signet · Demo data only" : "Signet test network · No real bitcoin"}</div>
           <div className="topbar-statuses">
             {demoMode ? (
-              <span className="demo-badge"><Play size={14} />DEMO MODE — NO REAL BITCOIN CORE</span>
+              <span className="demo-badge"><Play size={14} />DEMO MODE. NO REAL BITCOIN CORE</span>
             ) : (
               <StatusBadge connected={Boolean(coreStatus?.connected)} label={coreStatus?.connected ? "Core connected" : "Core offline"} />
             )}
@@ -625,7 +625,7 @@ function CoreStep({
       <StepHeader eyebrow="Step 1 · Bitcoin Core" title="Connect to your local node">
         <p>Core Vault checks the network and wallet support before it can make any changes.</p>
       </StepHeader>
-      {wrongNetwork && <SecurityNotice level="danger" title="STOP — wrong network"><p>Ova eksperimentalna verzija podržava isključivo Bitcoin Signet. Nemoj koristiti stvarni bitcoin.</p></SecurityNotice>}
+      {wrongNetwork && <SecurityNotice level="danger" title="STOP. Wrong network"><p>This experimental version supports Bitcoin Signet only. Do not use real bitcoin.</p></SecurityNotice>}
       <TrustFacts connected={Boolean(status?.connected)} network={status?.chain} demo={demoMode} />
       <div className="status-summary">
         <div className={`large-status-icon ${demoMode || status?.supported ? "is-good" : ""}`}>{demoMode ? <Play /> : status?.supported ? <CheckCircle2 /> : <LoaderCircle className={busy ? "spin" : ""} />}</div>
@@ -722,7 +722,7 @@ function VaultStep({ signers, vault, busy, onBuild, onContinue }: { signers: Sig
       <div className="signer-summary-grid">{signers.map((signer) => <div key={signer.label}><span className="mini-key"><KeyRound size={16} />{signer.label}</span><strong>{signer.name}</strong><small><Check size={14} />Created and encrypted</small></div>)}</div>
       <article className="coordinator-card"><div><Eye size={20} /><span><strong>Watch-only coordinator</strong><small>Tracks the vault and prepares transactions</small></span></div><span className="no-keys"><ShieldCheck size={16} />Private keys: none</span></article>
       {vault && <SecurityNotice level="success" title="Bitcoin Core checks passed"><p>Policy: 2-of-3 · Type: Native SegWit · Network: Signet · Coordinator private keys: None.</p></SecurityNotice>}
-      <div className="step-actions">{!vault ? <button className="button button-primary" onClick={onBuild} disabled={busy !== null}>{busy === "build-vault" ? "Bitcoin Core is building the vault…" : "I understand — create vault"}</button> : <button className="button button-primary" onClick={onContinue}>Continue to backup check <ArrowRight size={18} /></button>}</div>
+      <div className="step-actions">{!vault ? <button className="button button-primary" onClick={onBuild} disabled={busy !== null}>{busy === "build-vault" ? "Bitcoin Core is building the vault…" : "I understand. Create vault"}</button> : <button className="button button-primary" onClick={onContinue}>Continue to backup check <ArrowRight size={18} /></button>}</div>
     </section>
   );
 }

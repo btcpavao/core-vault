@@ -282,7 +282,7 @@ export default function SpatialApp() {
     const passphrase = passphraseRef.current?.value ?? "";
     const confirm = confirmRef.current?.value ?? "";
     if (passphrase !== confirm) {
-      setError(lang === "hr" ? "Lozinke se ne podudaraju." : "Passphrases do not match.");
+      setError("Passphrases do not match.");
       return;
     }
     clearCreatePassphrases();
@@ -380,7 +380,7 @@ export default function SpatialApp() {
     const newPassphrase = newPassphraseRef.current?.value ?? "";
     const confirmation = newPassphraseConfirmRef.current?.value ?? "";
     if (newPassphrase !== confirmation) {
-      setError(lang === "hr" ? "Nove lozinke se ne podudaraju." : "New passphrases do not match.");
+      setError("New passphrases do not match.");
       return;
     }
     clearChangePassphrases();
@@ -696,7 +696,7 @@ export default function SpatialApp() {
                 <p>The restored copy remains a separate wallet. Matching fingerprints compare public descriptors, not secret material.</p>
                 <Field label={tr("restoredName")}><input ref={restoredNameRef} defaultValue={`${selectedWallet ?? "vault"}_restore_test`} /></Field>
                 <button className="secondary-action" onClick={testRestore} disabled={!selectedWallet || loading}><RefreshCw size={17} /> {tr("chooseBackup")}</button>
-                {restore && <><div className={`receipt ${restore.fingerprintsMatch ? "success" : "danger"}`}>{restore.fingerprintsMatch ? <Check size={20} /> : <CircleAlert size={20} />}<span><strong>{restore.fingerprintsMatch ? "Public fingerprint matches" : "Fingerprint mismatch — STOP"}</strong><small>{restore.restoredWalletName}</small></span></div><button className="text-action" onClick={unloadRestored}>{tr("unload")}</button></>}
+                {restore && <><div className={`receipt ${restore.fingerprintsMatch ? "success" : "danger"}`}>{restore.fingerprintsMatch ? <Check size={20} /> : <CircleAlert size={20} />}<span><strong>{restore.fingerprintsMatch ? "Public fingerprint matches" : "Fingerprint mismatch. STOP"}</strong><small>{restore.restoredWalletName}</small></span></div><button className="text-action" onClick={unloadRestored}>{tr("unload")}</button></>}
             </ContextOverlay>}
           </WorldScene>
         )}
@@ -835,7 +835,7 @@ function SpendReview({ spend, tr, passphraseRef, loading, confirmed, setConfirme
 }
 
 function SettingsDialog({ preferences, update, close, replay, tr }: { preferences: Preferences; update: (patch: Partial<Preferences>) => void; close: () => void; replay: () => void; tr: (key: CopyKey) => string }) {
-  return <div className="modal-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && close()}><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title"><header><div><p className="eyebrow">INTERFACE</p><h2 id="settings-title">{tr("settings")}</h2></div><button className="icon-button" onClick={close} aria-label={tr("close")}><X size={19} /></button></header><div className="settings-list"><label><span>{tr("language")}</span><select value={preferences.language} onChange={(event) => update({ language: event.target.value as Preferences["language"] })}><option value="en">English</option><option value="hr">Hrvatski</option></select></label><label><span>{tr("reducedMotion")}</span><input type="checkbox" checked={preferences.reducedMotion} onChange={(event) => update({ reducedMotion: event.target.checked })} /></label><label><span>{tr("ambientSound")}</span><input type="checkbox" checked={preferences.ambientSound} onChange={(event) => update({ ambientSound: event.target.checked, soundChoiceMade: true, muted: event.target.checked ? false : preferences.muted })} /></label><label><span>{tr("interactionSound")}</span><input type="checkbox" checked={preferences.interactionSound} onChange={(event) => update({ interactionSound: event.target.checked, soundChoiceMade: true, muted: event.target.checked ? false : preferences.muted })} /></label><label className="volume-setting"><span>{tr("volume")}</span><input type="range" min="0" max="1" step="0.01" value={preferences.volume} onChange={(event) => update({ volume: Number(event.target.value) })} /></label></div><button className="secondary-action" onClick={replay}>{tr("replay")}</button></section></div>;
+  return <div className="modal-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && close()}><section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title"><header><div><p className="eyebrow">INTERFACE</p><h2 id="settings-title">{tr("settings")}</h2></div><button className="icon-button" onClick={close} aria-label={tr("close")}><X size={19} /></button></header><div className="settings-list"><label><span>{tr("reducedMotion")}</span><input type="checkbox" checked={preferences.reducedMotion} onChange={(event) => update({ reducedMotion: event.target.checked })} /></label><label><span>{tr("ambientSound")}</span><input type="checkbox" checked={preferences.ambientSound} onChange={(event) => update({ ambientSound: event.target.checked, soundChoiceMade: true, muted: event.target.checked ? false : preferences.muted })} /></label><label><span>{tr("interactionSound")}</span><input type="checkbox" checked={preferences.interactionSound} onChange={(event) => update({ interactionSound: event.target.checked, soundChoiceMade: true, muted: event.target.checked ? false : preferences.muted })} /></label><label className="volume-setting"><span>{tr("volume")}</span><input type="range" min="0" max="1" step="0.01" value={preferences.volume} onChange={(event) => update({ volume: Number(event.target.value) })} /></label></div><button className="secondary-action" onClick={replay}>{tr("replay")}</button></section></div>;
 }
 
 function Walkthrough({ step, setStep, finish, preferences, update, tr }: { step: number; setStep: (step: number) => void; finish: () => void; preferences: Preferences; update: (patch: Partial<Preferences>) => void; tr: (key: CopyKey) => string }) {

@@ -27,9 +27,9 @@ fn settings_from_state(state: &State<'_, AppState>) -> Result<ConnectionSettings
     state
         .connection
         .lock()
-        .map_err(|_| "Interni connection state nije dostupan.".to_string())?
+        .map_err(|_| "Internal connection state is unavailable.".to_string())?
         .clone()
-        .ok_or_else(|| "Najprije povežite lokalni Bitcoin Core.".to_string())
+        .ok_or_else(|| "Connect your local Bitcoin Core first.".to_string())
 }
 
 fn client_from_state(state: &State<'_, AppState>) -> Result<RpcClient, String> {
@@ -42,13 +42,13 @@ async fn discover_core(state: State<'_, AppState>) -> Result<Operation<CoreStatu
     if candidates.is_empty() {
         return Ok(Operation {
             data: offline_status(
-                "Signet cookie nije automatski pronađen. Otvorite Advanced connection settings.",
+                "The Signet cookie was not found automatically. Open Advanced connection settings.",
             ),
             rpc: Vec::new(),
         });
     }
 
-    let mut last_error = "Lokalni Bitcoin Core nije dostupan.".to_string();
+    let mut last_error = "The local Bitcoin Core instance is unavailable.".to_string();
     for settings in candidates {
         let mut traces = Vec::new();
         match inspect_core(settings.clone(), &mut traces).await {
@@ -57,7 +57,7 @@ async fn discover_core(state: State<'_, AppState>) -> Result<Operation<CoreStatu
                     *state
                         .connection
                         .lock()
-                        .map_err(|_| "Interni connection state nije dostupan.".to_string())? =
+                        .map_err(|_| "Internal connection state is unavailable.".to_string())? =
                         Some(settings);
                 }
                 return Ok(Operation {
@@ -84,7 +84,7 @@ async fn connect_core(
     let mut stored = state
         .connection
         .lock()
-        .map_err(|_| "Interni connection state nije dostupan.".to_string())?;
+        .map_err(|_| "Internal connection state is unavailable.".to_string())?;
     *stored = status.supported.then_some(settings);
     Ok(Operation {
         data: status,
@@ -282,7 +282,7 @@ async fn request_personal_broadcast_authorization(
         Ok::<_, String>((prepared, approved))
     })
     .await
-    .map_err(|_| "Native broadcast potvrda nije dostupna.".to_string())??;
+    .map_err(|_| "Native broadcast confirmation is unavailable.".to_string())??;
     personal::complete_personal_broadcast_authorization(&state, prepared, approved)
 }
 
@@ -448,7 +448,7 @@ async fn request_multisig_broadcast_authorization(
         Ok::<_, String>((prepared, approved))
     })
     .await
-    .map_err(|_| "Native broadcast potvrda nije dostupna.".to_string())??;
+    .map_err(|_| "Native broadcast confirmation is unavailable.".to_string())??;
     vault::complete_multisig_broadcast_authorization(&state, prepared, approved)
 }
 

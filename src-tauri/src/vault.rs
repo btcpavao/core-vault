@@ -57,7 +57,7 @@ pub async fn create_signing_wallet(
                 "external_signer": false
             }),
             None,
-            "Bitcoin Core stvara descriptor signing wallet već šifriran zadanom lozinkom.",
+            "Bitcoin Core creates a descriptor signing wallet already encrypted with the supplied passphrase.",
             Some(json!({
                 "wallet_name": wallet_name,
                 "disable_private_keys": false,
@@ -104,7 +104,7 @@ pub async fn backup_signing_wallet(
             "backupwallet",
             json!({ "destination": destination_display }),
             Some(&wallet_name),
-            "Bitcoin Core zapisuje službeni backup signing walleta na odabranu lokalnu putanju.",
+            "Bitcoin Core writes the official signing-wallet backup to the selected local path.",
             None,
             false,
             &mut traces,
@@ -112,11 +112,11 @@ pub async fn backup_signing_wallet(
         .await?;
 
     let metadata = fs::metadata(&destination).map_err(|_| {
-        "Bitcoin Core je završio poziv, ali backup datoteka nije pronađena na odredištu."
+        "Bitcoin Core completed the call, but the backup file was not found at the destination."
             .to_string()
     })?;
     if !metadata.is_file() || metadata.len() == 0 {
-        return Err("STOP: nastali wallet backup nije valjana neprazna datoteka.".into());
+        return Err("STOP: The resulting wallet backup is not a valid non-empty file.".into());
     }
     wallet.backup_path = Some(destination_display);
     Ok(Operation {
@@ -131,7 +131,7 @@ pub async fn build_multisig_vault(
     requested_coordinator_name: Option<String>,
 ) -> Result<Operation<VaultSummary>, String> {
     if wallet_names.len() != 3 {
-        return Err("Core Vault V1 zahtijeva točno tri signing walleta.".into());
+        return Err("Core Vault V1 requires exactly three signing wallets.".into());
     }
     for name in &wallet_names {
         validate_wallet_name(name)?;
@@ -140,7 +140,7 @@ pub async fn build_multisig_vault(
         || wallet_names[0] == wallet_names[2]
         || wallet_names[1] == wallet_names[2]
     {
-        return Err("K1, K2 i K3 moraju biti tri različita Bitcoin Core walleta.".into());
+        return Err("K1, K2, and K3 must be three different Bitcoin Core wallets.".into());
     }
 
     let mut traces = Vec::new();
@@ -153,7 +153,7 @@ pub async fn build_multisig_vault(
         let signer = verify_signing_wallet(&client, &label, wallet_name, &mut traces).await?;
         if !signer.encrypted || !signer.locked {
             return Err(format!(
-                "STOP: {label} ({wallet_name}) nije potvrđeno šifriran i zaključan. Coordinator nije stvoren."
+                "STOP: {label} ({wallet_name}) was not confirmed as encrypted and locked. The coordinator was not created."
             ));
         }
         let descriptors = client
@@ -161,7 +161,7 @@ pub async fn build_multisig_vault(
                 "listdescriptors",
                 json!({ "private": false }),
                 Some(wallet_name),
-                "Bitcoin Core vraća samo javne descriptore kako bi se pronašle receive i change grane.",
+                "Bitcoin Core returns only public descriptors so the receive and change branches can be found.",
                 None,
                 false,
                 &mut traces,
@@ -198,7 +198,7 @@ pub async fn build_multisig_vault(
                 "load_on_startup": true
             }),
             None,
-            "Bitcoin Core stvara prazan watch-only coordinator bez privatnih ključeva.",
+            "Bitcoin Core creates an empty watch-only coordinator without private keys.",
             None,
             false,
             &mut traces,
@@ -295,12 +295,12 @@ pub fn export_public_backup(
         .create_new(true)
         .open(&path)
         .map_err(|_| {
-            "Public vault konfiguraciju nije moguće zapisati bez prepisivanja postojeće datoteke."
+            "Could not write the public vault configuration without overwriting an existing file."
                 .to_string()
         })?;
     file.write_all(format!("{serialized}\n").as_bytes())
         .map_err(|_| {
-            "Public vault konfiguraciju nije moguće zapisati na odabranu putanju.".to_string()
+            "Could not write the public vault configuration to the selected path.".to_string()
         })?;
     Ok(path.to_string_lossy().into_owned())
 }
@@ -321,25 +321,25 @@ pub async fn get_receive_snapshot(
                 "getnewaddress",
                 json!({ "label": "Core Vault receive test", "address_type": "bech32" }),
                 Some(&coordinator_name),
-                "Bitcoin Core generira novu receive adresu iz aktivnog vault descriptora na potvrđenoj testnoj mreži.",
+                "Bitcoin Core generates a new receive address from the active vault descriptor on the confirmed test network.",
                 None,
                 false,
                 &mut traces,
             )
             .await?
             .as_str()
-            .ok_or_else(|| "Bitcoin Core nije vratio receive adresu.".to_string())?
+            .ok_or_else(|| "Bitcoin Core did not return a receive address.".to_string())?
             .to_string(),
     };
     if address.trim().is_empty() {
-        return Err("STOP: coordinator nije vratio valjanu Native SegWit adresu.".into());
+        return Err("STOP: The coordinator did not return a valid Native SegWit address.".into());
     }
     let address_info = client
         .call(
             "getaddressinfo",
             json!({ "address": address }),
             Some(&coordinator_name),
-            "Provjerava da coordinator prepoznaje adresu kao rješivu watch-only adresu vaulta.",
+            "Checks that the coordinator recognizes the address as a solvable watch-only vault address.",
             None,
             false,
             &mut traces,
@@ -350,7 +350,7 @@ pub async fn get_receive_snapshot(
             "getbalances",
             json!({}),
             Some(&coordinator_name),
-            "Čita lokalno potvrđeni i nepotvrđeni balance coordinatora.",
+            "Reads the coordinator's locally confirmed and unconfirmed balance.",
             None,
             false,
             &mut traces,
@@ -359,7 +359,10 @@ pub async fn get_receive_snapshot(
     let balance_btc = wallet_balance_btc(&balances);
     let solvable = address_info.get("solvable").and_then(Value::as_bool) == Some(true);
     if !solvable {
-        return Err("STOP: Bitcoin Core ne smatra receive adresu rješivom iz coordinatora.".into());
+        return Err(
+            "STOP: Bitcoin Core does not consider the receive address solvable by the coordinator."
+                .into(),
+        );
     }
     Ok(Operation {
         data: ReceiveSnapshot {
@@ -383,10 +386,10 @@ pub async fn create_spend_draft(
 ) -> Result<Operation<SpendDraftView>, String> {
     validate_wallet_name(&coordinator_name)?;
     if amount_sats == 0 || amount_sats > 2_100_000_000_000_000 {
-        return Err("Unesite valjan iznos veći od 0 sats.".into());
+        return Err("Enter a valid amount greater than 0 sats.".into());
     }
     if !(1.0..=1_000.0).contains(&fee_rate_sat_vb) {
-        return Err("Fee rate mora biti između 1 i 1.000 sat/vB.".into());
+        return Err("The fee rate must be between 1 and 1,000 sat/vB.".into());
     }
     let mut traces = Vec::new();
     let network = ensure_test_chain(&client, &mut traces).await?;
@@ -396,7 +399,7 @@ pub async fn create_spend_draft(
             "getbalances",
             json!({}),
             Some(&coordinator_name),
-            "Bilježi početni lokalni vault balance za razumljiv transaction review.",
+            "Records the initial local vault balance for a clear transaction review.",
             None,
             false,
             &mut traces,
@@ -408,7 +411,7 @@ pub async fn create_spend_draft(
             "validateaddress",
             json!({ "address": destination }),
             None,
-            "Bitcoin Core provjerava format i mrežu adrese primatelja.",
+            "Bitcoin Core checks the recipient address format and network.",
             None,
             false,
             &mut traces,
@@ -416,14 +419,14 @@ pub async fn create_spend_draft(
         .await?;
     if validated.get("isvalid").and_then(Value::as_bool) != Some(true) {
         return Err(
-            "Adresa primatelja nije valjana adresa za potvrđenu testnu mrežu. Transakcija nije napravljena.".into(),
+            "The recipient address is not valid for the confirmed test network. The transaction was not created.".into(),
         );
     }
 
     let amount_btc = amount_sats as f64 / 100_000_000.0;
     let amount_value = serde_json::Number::from_f64(amount_btc)
         .map(Value::Number)
-        .ok_or_else(|| "Iznos nije moguće sigurno pretvoriti u BTC.".to_string())?;
+        .ok_or_else(|| "Could not convert the amount to BTC safely.".to_string())?;
     let mut output = Map::new();
     output.insert(destination.clone(), amount_value);
     let funded = client
@@ -442,7 +445,7 @@ pub async fn create_spend_draft(
                 "bip32derivs": true
             }),
             Some(&coordinator_name),
-            "Watch-only coordinator odabire sredstva, dodaje change i priprema PSBT bez potpisa.",
+            "The watch-only coordinator selects funds, adds change, and prepares an unsigned PSBT.",
             None,
             true,
             &mut traces,
@@ -452,7 +455,7 @@ pub async fn create_spend_draft(
         .get("psbt")
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Bitcoin Core nije vratio pripremljeni PSBT.".to_string())?
+        .ok_or_else(|| "Bitcoin Core did not return the prepared PSBT.".to_string())?
         .to_string();
     let fee_btc = funded.get("fee").and_then(Value::as_f64).unwrap_or(0.0);
     let draft_id = next_draft_id();
@@ -476,7 +479,7 @@ pub async fn create_spend_draft(
     state
         .drafts
         .lock()
-        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?
+        .map_err(|_| "Internal transaction state is unavailable.".to_string())?
         .insert(draft_id, draft);
     Ok(Operation {
         data: view,
@@ -495,22 +498,25 @@ pub async fn sign_spend_draft(
     let snapshot = state
         .drafts
         .lock()
-        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?
+        .map_err(|_| "Internal transaction state is unavailable.".to_string())?
         .get(&draft_id)
         .cloned()
-        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+        .ok_or_else(|| {
+            "The transaction draft is no longer available. Create a new one.".to_string()
+        })?;
     ensure_legacy_workflow_can_progress(&snapshot)?;
     if snapshot.broadcast_in_progress {
-        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+        return Err("A broadcast attempt is already in progress for this transaction.".into());
     }
     if snapshot.raw_hex.is_some() {
         return Err(
-            "Transakcija je već finalizirana. Novi potpis zahtijeva novi transaction draft.".into(),
+            "The transaction is already finalized. A new signature requires a new transaction draft.".into(),
         );
     }
     if snapshot.signed_by.iter().any(|name| name == &wallet_name) {
         return Err(
-            "Ovaj signing wallet već je odobrio transakciju. Odaberite drugi ključ.".into(),
+            "This signing wallet has already approved the transaction. Choose a different key."
+                .into(),
         );
     }
     let passphrase = Zeroizing::new(passphrase);
@@ -519,7 +525,7 @@ pub async fn sign_spend_draft(
     let wallet = verify_signing_wallet(&client, "Signer", &wallet_name, &mut traces).await?;
     if wallet.encrypted && passphrase.is_empty() {
         return Err(format!(
-            "{wallet_name} je zaključan. Bitcoin je siguran; unesite njegovu lozinku za potpis."
+            "{wallet_name} is locked. The bitcoin is safe. Enter its passphrase to sign."
         ));
     }
 
@@ -529,7 +535,7 @@ pub async fn sign_spend_draft(
                 "walletpassphrase",
                 json!({ "passphrase": passphrase.as_str(), "timeout": 5 }),
                 Some(&wallet_name),
-                "Bitcoin Core otključava odabrani signing wallet na najviše pet sekundi.",
+                "Bitcoin Core unlocks the selected signing wallet for no more than five seconds.",
                 Some(json!({ "passphrase": "[REDACTED]", "timeout": 5 })),
                 false,
                 &mut traces,
@@ -547,7 +553,7 @@ pub async fn sign_spend_draft(
                 "bip32derivs": true
             }),
             Some(&wallet_name),
-            "Bitcoin Core dodaje potpis iz ovog signing walleta u PSBT.",
+            "Bitcoin Core adds a signature from this signing wallet to the PSBT.",
             Some(json!({ "psbt": "[REDACTED]", "sign": true, "sighashtype": "ALL" })),
             true,
             &mut traces,
@@ -561,7 +567,7 @@ pub async fn sign_spend_draft(
                 "walletlock",
                 json!({}),
                 Some(&wallet_name),
-                "Bitcoin Core odmah ponovno zaključava signing wallet.",
+                "Bitcoin Core immediately locks the signing wallet again.",
                 None,
                 false,
                 &mut traces,
@@ -577,14 +583,12 @@ pub async fn sign_spend_draft(
     let mut drafts = state
         .drafts
         .lock()
-        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
-    let draft = drafts
-        .get_mut(&draft_id)
-        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+        .map_err(|_| "Internal transaction state is unavailable.".to_string())?;
+    let draft = drafts.get_mut(&draft_id).ok_or_else(|| {
+        "The transaction draft is no longer available. Create a new one.".to_string()
+    })?;
     if draft.psbt != snapshot.psbt {
-        return Err(
-            "Transaction draft promijenjen je drugim potpisom. Ponovno učitajte stanje.".into(),
-        );
+        return Err("Another signature changed the transaction draft. Reload its state.".into());
     }
 
     match outcome {
@@ -631,13 +635,15 @@ pub async fn retry_signer_lock(
     let stop = state
         .drafts
         .lock()
-        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?
+        .map_err(|_| "Internal transaction state is unavailable.".to_string())?
         .get(&draft_id)
         .cloned()
-        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?
+        .ok_or_else(|| {
+            "The transaction draft is no longer available. Create a new one.".to_string()
+        })?
         .relock_required
         .ok_or_else(|| {
-            "Ovaj transaction draft ne zahtijeva ponovno zaključavanje signera.".to_string()
+            "This transaction draft does not require the signer to be locked again.".to_string()
         })?;
 
     let mut traces = Vec::new();
@@ -646,7 +652,7 @@ pub async fn retry_signer_lock(
             "walletlock",
             json!({}),
             Some(&stop.wallet_name),
-            "Bitcoin Core ponovno pokušava zaključati točno onaj signer čiji cleanup nije potvrđen.",
+            "Bitcoin Core retries locking the exact signer whose cleanup was not confirmed.",
             None,
             false,
             &mut traces,
@@ -656,18 +662,16 @@ pub async fn retry_signer_lock(
     let mut drafts = state
         .drafts
         .lock()
-        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
-    let draft = drafts
-        .get_mut(&draft_id)
-        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+        .map_err(|_| "Internal transaction state is unavailable.".to_string())?;
+    let draft = drafts.get_mut(&draft_id).ok_or_else(|| {
+        "The transaction draft is no longer available. Create a new one.".to_string()
+    })?;
     let current_stop = draft.relock_required.as_mut().ok_or_else(|| {
-        "Signer relock stanje promijenjeno je tijekom pokušaja; ponovno učitajte transaction."
-            .to_string()
+        "The signer relock state changed during the attempt. Reload the transaction.".to_string()
     })?;
     if current_stop.wallet_name != stop.wallet_name {
         return Err(
-            "Signer relock stanje promijenjeno je tijekom pokušaja; ponovno učitajte transaction."
-                .into(),
+            "The signer relock state changed during the attempt. Reload the transaction.".into(),
         );
     }
 
@@ -690,19 +694,21 @@ pub async fn finalize_multisig_spend(
     let snapshot = state
         .drafts
         .lock()
-        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?
+        .map_err(|_| "Internal transaction state is unavailable.".to_string())?
         .get(&draft_id)
         .cloned()
-        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+        .ok_or_else(|| {
+            "The transaction draft is no longer available. Create a new one.".to_string()
+        })?;
     ensure_legacy_workflow_can_progress(&snapshot)?;
     if snapshot.broadcast_in_progress {
-        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+        return Err("A broadcast attempt is already in progress for this transaction.".into());
     }
     if snapshot.signed_by.len() < 2 || !snapshot.complete {
-        return Err("Transakcija treba još potpisa i ne može se finalizirati.".into());
+        return Err("The transaction needs more signatures and cannot be finalized.".into());
     }
     if snapshot.raw_hex.is_some() {
-        return Err("Transakcija je već finalizirana.".into());
+        return Err("The transaction is already finalized.".into());
     }
     let mut traces = Vec::new();
     ensure_test_chain(&client, &mut traces).await?;
@@ -712,7 +718,7 @@ pub async fn finalize_multisig_spend(
             "finalizepsbt",
             json!({ "psbt": snapshot.psbt, "extract": true }),
             None,
-            "Bitcoin Core lokalno provjerava potpise i finalizira transakciju bez preflighta ili broadcasta.",
+            "Bitcoin Core checks signatures locally and finalizes the transaction without preflight or broadcast.",
             Some(json!({ "psbt": "[REDACTED]", "extract": true })),
             true,
             &mut traces,
@@ -720,7 +726,7 @@ pub async fn finalize_multisig_spend(
         .await?;
     if finalized.get("complete").and_then(Value::as_bool) != Some(true) {
         return Err(
-            "Bitcoin Core nije potvrdio dovoljan broj potpisa. Finalizirano stanje nije spremljeno."
+            "Bitcoin Core did not confirm enough signatures. The finalized state was not saved."
                 .into(),
         );
     }
@@ -728,21 +734,18 @@ pub async fn finalize_multisig_spend(
         .get("hex")
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Bitcoin Core nije vratio finalizirani transaction hex.".to_string())?
+        .ok_or_else(|| "Bitcoin Core did not return the finalized transaction hex.".to_string())?
         .to_string();
     let mut drafts = state
         .drafts
         .lock()
-        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
-    let draft = drafts
-        .get_mut(&draft_id)
-        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+        .map_err(|_| "Internal transaction state is unavailable.".to_string())?;
+    let draft = drafts.get_mut(&draft_id).ok_or_else(|| {
+        "The transaction draft is no longer available. Create a new one.".to_string()
+    })?;
     ensure_legacy_workflow_can_progress(draft)?;
     if draft.psbt != snapshot.psbt || draft.raw_hex.is_some() || draft.broadcast_in_progress {
-        return Err(
-            "Transaction draft promijenjen je tijekom finalizacije. Ponovno učitajte stanje."
-                .into(),
-        );
+        return Err("The transaction draft changed during finalization. Reload its state.".into());
     }
     draft.raw_hex = Some(raw_hex);
     draft.mempool_preflight = MempoolPreflight::NotRun;
@@ -751,7 +754,7 @@ pub async fn finalize_multisig_spend(
     state
         .broadcast_authorizations
         .lock()
-        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .map_err(|_| "Broadcast authorizations are currently unavailable.".to_string())?
         .revoke_draft(&draft_id);
     Ok(Operation {
         data: view,
@@ -767,18 +770,20 @@ pub async fn preflight_multisig_spend(
     let snapshot = state
         .drafts
         .lock()
-        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?
+        .map_err(|_| "Internal transaction state is unavailable.".to_string())?
         .get(&draft_id)
         .cloned()
-        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+        .ok_or_else(|| {
+            "The transaction draft is no longer available. Create a new one.".to_string()
+        })?;
     ensure_legacy_workflow_can_progress(&snapshot)?;
     if snapshot.broadcast_in_progress {
-        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+        return Err("A broadcast attempt is already in progress for this transaction.".into());
     }
     let raw_hex = snapshot
         .raw_hex
         .clone()
-        .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
+        .ok_or_else(|| "The transaction has not been finalized yet.".to_string())?;
     let transaction_identity = finalized_transaction_identity(&raw_hex);
     let mut traces = Vec::new();
     let preflight = match ensure_test_chain(&client, &mut traces).await {
@@ -787,7 +792,7 @@ pub async fn preflight_multisig_spend(
                 "testmempoolaccept",
                 json!({ "rawtxs": [raw_hex] }),
                 None,
-                "Bitcoin Core lokalno provjerava točno finaliziranu transakciju bez broadcasta.",
+                "Bitcoin Core checks the exact finalized transaction locally without broadcasting it.",
                 Some(json!({ "rawtxs": ["[REDACTED]"] })),
                 true,
                 &mut traces,
@@ -797,13 +802,13 @@ pub async fn preflight_multisig_spend(
             Ok(result) => parse_mempool_preflight(result, transaction_identity.clone()),
             Err(_) => MempoolPreflight::Indeterminate {
                 transaction_identity: transaction_identity.clone(),
-                reason: "Core Vault nije mogao dobiti pouzdan testmempoolaccept rezultat. Broadcast je onemogućen."
+                reason: "Core Vault could not obtain a reliable testmempoolaccept result. Broadcast is disabled."
                     .into(),
             },
         },
         Err(_) => MempoolPreflight::Indeterminate {
             transaction_identity: transaction_identity.clone(),
-            reason: "Core Vault nije mogao potvrditi podržanu mrežu za mempool provjeru. Broadcast je onemogućen."
+            reason: "Core Vault could not confirm a supported network for the mempool check. Broadcast is disabled."
                 .into(),
         },
     };
@@ -811,14 +816,14 @@ pub async fn preflight_multisig_spend(
     let mut drafts = state
         .drafts
         .lock()
-        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
-    let draft = drafts
-        .get_mut(&draft_id)
-        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+        .map_err(|_| "Internal transaction state is unavailable.".to_string())?;
+    let draft = drafts.get_mut(&draft_id).ok_or_else(|| {
+        "The transaction draft is no longer available. Create a new one.".to_string()
+    })?;
     ensure_legacy_workflow_can_progress(draft)?;
     if draft.raw_hex.as_deref() != Some(raw_hex.as_str()) || draft.broadcast_in_progress {
         return Err(
-            "Finalizirana transakcija promijenjena je tijekom mempool provjere. Pokrenite provjeru ponovno."
+            "The finalized transaction changed during the mempool check. Run the check again."
                 .into(),
         );
     }
@@ -828,7 +833,7 @@ pub async fn preflight_multisig_spend(
     state
         .broadcast_authorizations
         .lock()
-        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .map_err(|_| "Broadcast authorizations are currently unavailable.".to_string())?
         .revoke_draft(&draft_id);
     Ok(Operation {
         data: view,
@@ -851,10 +856,10 @@ pub fn prepare_multisig_broadcast_authorization(
     let drafts = state
         .drafts
         .lock()
-        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
-    let draft = drafts
-        .get(draft_id)
-        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+        .map_err(|_| "Internal transaction state is unavailable.".to_string())?;
+    let draft = drafts.get(draft_id).ok_or_else(|| {
+        "The transaction draft is no longer available. Create a new one.".to_string()
+    })?;
     let (_, transaction_identity) = ensure_legacy_ready_for_broadcast(draft)?;
     Ok(PreparedMultisigBroadcastAuthorization {
         draft_id: draft_id.into(),
@@ -881,23 +886,23 @@ pub fn complete_multisig_broadcast_authorization(
     let drafts = state
         .drafts
         .lock()
-        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
-    let draft = drafts
-        .get(&prepared.draft_id)
-        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+        .map_err(|_| "Internal transaction state is unavailable.".to_string())?;
+    let draft = drafts.get(&prepared.draft_id).ok_or_else(|| {
+        "The transaction draft is no longer available. Create a new one.".to_string()
+    })?;
     let (_, current_identity) = ensure_legacy_ready_for_broadcast(draft)?;
     if current_identity != prepared.transaction_identity
         || draft.preflight_version != prepared.preflight_version
     {
         return Err(
-            "Transakcija ili njezina mempool provjera promijenila se tijekom potvrde. Ponovno pregledajte i potvrdite broadcast."
+            "The transaction or its mempool check changed during confirmation. Review and confirm the broadcast again."
                 .into(),
         );
     }
     let grant = state
         .broadcast_authorizations
         .lock()
-        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .map_err(|_| "Broadcast authorizations are currently unavailable.".to_string())?
         .issue(
             BroadcastPurpose::LegacyMultisigTransaction,
             prepared.draft_id,
@@ -927,15 +932,17 @@ pub async fn broadcast_multisig_spend(
     let snapshot = state
         .drafts
         .lock()
-        .map_err(|_| "Interni transaction state nije dostupan.".to_string())?
+        .map_err(|_| "Internal transaction state is unavailable.".to_string())?
         .get(&draft_id)
         .cloned()
-        .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+        .ok_or_else(|| {
+            "The transaction draft is no longer available. Create a new one.".to_string()
+        })?;
     let (_, transaction_identity) = ensure_legacy_ready_for_broadcast(&snapshot)?;
     state
         .broadcast_authorizations
         .lock()
-        .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+        .map_err(|_| "Broadcast authorizations are currently unavailable.".to_string())?
         .consume(
             &authorization_id,
             BroadcastPurpose::LegacyMultisigTransaction,
@@ -948,16 +955,16 @@ pub async fn broadcast_multisig_spend(
         let mut drafts = state
             .drafts
             .lock()
-            .map_err(|_| "Interni transaction state nije dostupan.".to_string())?;
-        let draft = drafts
-            .get_mut(&draft_id)
-            .ok_or_else(|| "Transaction draft više nije dostupan; izradite novi.".to_string())?;
+            .map_err(|_| "Internal transaction state is unavailable.".to_string())?;
+        let draft = drafts.get_mut(&draft_id).ok_or_else(|| {
+            "The transaction draft is no longer available. Create a new one.".to_string()
+        })?;
         let (_, current_identity) = ensure_legacy_ready_for_broadcast(draft)?;
         if current_identity != transaction_identity
             || draft.preflight_version != snapshot.preflight_version
         {
             return Err(
-                "Transakcija ili preflight promijenili su se prije broadcasta. Autorizacija je potrošena."
+                "The transaction or preflight changed before broadcast. The authorization has been consumed."
                     .into(),
             );
         }
@@ -969,7 +976,7 @@ pub async fn broadcast_multisig_spend(
         let current_network = ensure_test_chain(&client, &mut traces).await?;
         if current_network != snapshot.network {
             return Err(
-                "STOP: aktivna Bitcoin Core mreža ne odgovara mreži pregledanog transaction drafta. Autorizacija je potrošena."
+                "STOP: The active Bitcoin Core network does not match the reviewed transaction draft. The authorization has been consumed."
                     .into(),
             );
         }
@@ -978,7 +985,7 @@ pub async fn broadcast_multisig_spend(
                 "getnetworkinfo",
                 json!({}),
                 None,
-                "Neposredno prije broadcasta provjerava da je Bitcoin Core P2P mreža aktivna.",
+                "Checks that the Bitcoin Core P2P network is active immediately before broadcast.",
                 None,
                 false,
                 &mut traces,
@@ -986,20 +993,20 @@ pub async fn broadcast_multisig_spend(
             .await?;
         if network.get("networkactive").and_then(Value::as_bool) != Some(true) {
             return Err(
-                "Broadcast je onemogućen dok je Bitcoin Core network activity disabled. Autorizacija je potrošena."
+                "Broadcast is disabled while Bitcoin Core network activity is disabled. The authorization has been consumed."
                     .into(),
             );
         }
         let raw_hex = snapshot
             .raw_hex
             .as_deref()
-            .ok_or_else(|| "Transakcija više nije finalizirana.".to_string())?;
+            .ok_or_else(|| "The transaction is no longer finalized.".to_string())?;
         let txid = client
             .call(
                 "sendrawtransaction",
                 json!({ "hexstring": raw_hex }),
                 None,
-                "Bitcoin Core broadcasta autoriziranu finaliziranu transakciju na potvrđenoj testnoj mreži.",
+                "Bitcoin Core broadcasts the authorized finalized transaction on the confirmed test network.",
                 Some(json!({ "hexstring": "[REDACTED]" })),
                 false,
                 &mut traces,
@@ -1007,7 +1014,7 @@ pub async fn broadcast_multisig_spend(
             .await?
             .as_str()
             .filter(|value| value.len() == 64 && value.chars().all(|character| character.is_ascii_hexdigit()))
-            .ok_or_else(|| "Bitcoin Core nije vratio valjani txid.".to_string())?
+            .ok_or_else(|| "Bitcoin Core did not return a valid txid.".to_string())?
             .to_string();
         let fee_sats = btc_to_sats(snapshot.fee_btc);
         let estimated_remaining = snapshot
@@ -1019,7 +1026,7 @@ pub async fn broadcast_multisig_spend(
                 "getbalances",
                 json!({}),
                 Some(&snapshot.coordinator_name),
-                "Nakon uspješnog broadcasta osvježava lokalni vault balance i provjerava change.",
+                "Refreshes the local vault balance and checks change after a successful broadcast.",
                 None,
                 false,
                 &mut traces,
@@ -1045,12 +1052,12 @@ pub async fn broadcast_multisig_spend(
             state
                 .drafts
                 .lock()
-                .map_err(|_| "Interni transaction state nije dostupan.".to_string())?
+                .map_err(|_| "Internal transaction state is unavailable.".to_string())?
                 .remove(&draft_id);
             state
                 .broadcast_authorizations
                 .lock()
-                .map_err(|_| "Broadcast autorizacije trenutačno nisu dostupne.".to_string())?
+                .map_err(|_| "Broadcast authorizations are currently unavailable.".to_string())?
                 .revoke_draft(&draft_id);
             Ok(Operation {
                 data: result,
@@ -1071,15 +1078,15 @@ pub async fn broadcast_multisig_spend(
 fn ensure_legacy_ready_for_broadcast(draft: &SpendState) -> Result<(&str, String), String> {
     ensure_legacy_workflow_can_progress(draft)?;
     if draft.broadcast_in_progress {
-        return Err("Broadcast pokušaj je već u tijeku za ovu transakciju.".into());
+        return Err("A broadcast attempt is already in progress for this transaction.".into());
     }
     if draft.signed_by.len() < 2 || !draft.complete {
-        return Err("Transakcija nema potvrđen prag potpisa.".into());
+        return Err("The transaction does not have a confirmed signature threshold.".into());
     }
     let raw_hex = draft
         .raw_hex
         .as_deref()
-        .ok_or_else(|| "Transakcija još nije finalizirana.".to_string())?;
+        .ok_or_else(|| "The transaction has not been finalized yet.".to_string())?;
     ensure_broadcast_preflight(&draft.mempool_preflight, raw_hex)?;
     Ok((raw_hex, finalized_transaction_identity(raw_hex)))
 }
@@ -1124,11 +1131,11 @@ fn parse_legacy_signature(
         .get("psbt")
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Bitcoin Core nije vratio ažurirani PSBT.".to_string())?
+        .ok_or_else(|| "Bitcoin Core did not return an updated PSBT.".to_string())?
         .to_string();
     if updated_psbt == previous_psbt {
         return Err(
-            "Signing wallet nije dodao potpis. Bitcoin je siguran i transakcija nije poslana."
+            "The signing wallet did not add a signature. The bitcoin is safe and the transaction was not broadcast."
                 .into(),
         );
     }
@@ -1190,7 +1197,7 @@ fn relock_required_state(
 fn ensure_legacy_workflow_can_progress(draft: &SpendState) -> Result<(), String> {
     if let Some(stop) = &draft.relock_required {
         return Err(format!(
-            "STOP: signer wallet {} nije potvrđeno ponovno zaključan. Daljnje potpisivanje, finalizacija i broadcast blokirani su dok Retry lock ne uspije.",
+            "STOP: Signing wallet {} was not confirmed as locked again. Further signing, finalization, and broadcast are blocked until Retry lock succeeds.",
             stop.wallet_name
         ));
     }
@@ -1205,7 +1212,9 @@ async fn verify_new_signing_wallet(
 ) -> Result<SigningWallet, String> {
     let mut wallet = verify_signing_wallet(client, label, wallet_name, traces).await?;
     if !wallet.encrypted || !wallet.locked {
-        return Err("Bitcoin Core nije potvrdio da je signer wallet šifriran i zaključan.".into());
+        return Err(
+            "Bitcoin Core did not confirm that the signing wallet is encrypted and locked.".into(),
+        );
     }
     wallet.public_identity =
         Some(read_signer_public_identity(client, label, wallet_name, traces).await?);
@@ -1223,7 +1232,7 @@ async fn read_signer_public_identity(
             "listdescriptors",
             json!({ "private": false }),
             Some(wallet_name),
-            "Bitcoin Core vraća samo javni receive i change identitet novog signera.",
+            "Bitcoin Core returns only the new signer's public receive and change identity.",
             None,
             false,
             traces,
@@ -1242,7 +1251,7 @@ async fn read_signer_public_identity(
 
 fn signer_postcondition_error(label: &str, wallet_name: &str, reason: &str) -> String {
     format!(
-        "PARTIAL CREATION: Bitcoin Core stvorio je signer {label} ({wallet_name}), ali Core Vault nije mogao potvrditi očekivano šifrirano i zaključano stanje s valjanim javnim identitetom. Multisig setup je zaustavljen; Core wallet nije obrisan. Razlog: {}",
+        "PARTIAL CREATION: Bitcoin Core created signer {label} ({wallet_name}), but Core Vault could not confirm the expected encrypted and locked state with a valid public identity. Multisig setup has stopped. The Core wallet was not deleted. Reason: {}",
         sanitize_rpc_text(reason)
     )
 }
@@ -1258,7 +1267,7 @@ async fn verify_signing_wallet(
             "getwalletinfo",
             json!({}),
             Some(wallet_name),
-            "Provjerava sigurnosne invarijante signing walleta.",
+            "Checks the signing wallet security invariants.",
             None,
             false,
             traces,
@@ -1269,7 +1278,7 @@ async fn verify_signing_wallet(
         info.get("private_keys_enabled").and_then(Value::as_bool) == Some(true);
     if !descriptors || !private_keys_enabled {
         return Err(format!(
-            "STOP: {wallet_name} nije descriptor signing wallet s uključenim privatnim ključevima."
+            "STOP: {wallet_name} is not a descriptor signing wallet with private keys enabled."
         ));
     }
     let encrypted = info.get("unlocked_until").is_some();
@@ -1301,7 +1310,7 @@ async fn verify_coordinator(
             "getwalletinfo",
             json!({}),
             Some(wallet_name),
-            "Provjerava da coordinator nema privatne ključeve.",
+            "Checks that the coordinator has no private keys.",
             None,
             false,
             traces,
@@ -1314,7 +1323,8 @@ async fn verify_coordinator(
         .unwrap_or(true);
     if !descriptors || private_keys_enabled {
         return Err(
-            "STOP: coordinator nije watch-only descriptor wallet bez privatnih ključeva.".into(),
+            "STOP: The coordinator is not a watch-only descriptor wallet without private keys."
+                .into(),
         );
     }
     Ok(())
@@ -1324,7 +1334,10 @@ fn extract_descriptor_pair(result: &Value) -> Result<(DescriptorKey, DescriptorK
     let descriptors = result
         .get("descriptors")
         .and_then(Value::as_array)
-        .ok_or_else(|| "listdescriptors odgovor nema očekivani descriptors popis.".to_string())?;
+        .ok_or_else(|| {
+            "The listdescriptors response does not contain the expected descriptor list."
+                .to_string()
+        })?;
     let mut receive = Vec::new();
     let mut change = Vec::new();
     for entry in descriptors {
@@ -1347,7 +1360,7 @@ fn extract_descriptor_pair(result: &Value) -> Result<(DescriptorKey, DescriptorK
     }
     if receive.len() != 1 || change.len() != 1 {
         return Err(format!(
-            "STOP: očekivan je jedan javni wpkh receive /0/* i jedan change /1/* descriptor; pronađeno {} i {}.",
+            "STOP: Expected one public wpkh receive /0/* descriptor and one change /1/* descriptor. Found {} and {}.",
             receive.len(),
             change.len()
         ));
@@ -1357,39 +1370,43 @@ fn extract_descriptor_pair(result: &Value) -> Result<(DescriptorKey, DescriptorK
 
 fn parse_wpkh_descriptor(desc: &str) -> Result<DescriptorKey, String> {
     if contains_private_material(desc) {
-        return Err("STOP: listdescriptors odgovor sadrži privatni key materijal.".into());
+        return Err("STOP: The listdescriptors response contains private-key material.".into());
     }
     let without_checksum = desc.split('#').next().unwrap_or(desc);
     let inner = without_checksum
         .strip_prefix("wpkh([")
         .and_then(|value| value.strip_suffix(')'))
-        .ok_or_else(|| "wpkh descriptor nema očekivanu javnu origin strukturu.".to_string())?;
+        .ok_or_else(|| {
+            "The wpkh descriptor does not have the expected public origin structure.".to_string()
+        })?;
     let closing = inner
         .find(']')
         .ok_or_else(|| "Descriptor nema master fingerprint i derivation path.".to_string())?;
     let origin = &inner[..closing];
     let key_path = &inner[closing + 1..];
     if origin.len() < 10 {
-        return Err("Descriptor origin nije potpun.".into());
+        return Err("The descriptor origin is incomplete.".into());
     }
     let (fingerprint, derivation_path) = origin.split_at(8);
     if !fingerprint.chars().all(|value| value.is_ascii_hexdigit())
         || !derivation_path.starts_with('/')
     {
-        return Err("Descriptor master fingerprint ili derivation path nije valjan.".into());
+        return Err("The descriptor master fingerprint or derivation path is invalid.".into());
     }
     let (tpub, branch) = if let Some(value) = key_path.strip_suffix("/0/*") {
         (value, 0)
     } else if let Some(value) = key_path.strip_suffix("/1/*") {
         (value, 1)
     } else {
-        return Err("Descriptor nije očekivana ranged /0/* ili /1/* grana.".into());
+        return Err("The descriptor is not the expected ranged /0/* or /1/* branch.".into());
     };
     if !tpub.starts_with("tpub")
         || tpub.len() < 100
         || !tpub.chars().all(|value| value.is_ascii_alphanumeric())
     {
-        return Err("Descriptor ne sadrži očekivani Signet/Testnet javni tpub.".into());
+        return Err(
+            "The descriptor does not contain the expected public Signet/Testnet tpub.".into(),
+        );
     }
     Ok(DescriptorKey {
         fingerprint: fingerprint.to_ascii_lowercase(),
@@ -1414,7 +1431,7 @@ fn validate_key_set(
                 || receive[left].2.tpub == receive[right].2.tpub
             {
                 return Err(
-                    "STOP: K1, K2 i K3 moraju imati različite fingerprinte i tpubove.".into(),
+                    "STOP: K1, K2, and K3 must have different fingerprints and tpubs.".into(),
                 );
             }
         }
@@ -1424,7 +1441,9 @@ fn validate_key_set(
         .iter()
         .any(|(_, _, key)| &key.derivation_path != path)
     {
-        return Err("STOP: signing walleti nemaju kompatibilnu derivation path strukturu.".into());
+        return Err(
+            "STOP: The signing wallets do not have compatible derivation-path structures.".into(),
+        );
     }
     Ok(())
 }
@@ -1470,7 +1489,9 @@ async fn validate_descriptor(
             "getdescriptorinfo",
             json!({ "descriptor": descriptor }),
             None,
-            &format!("Bitcoin Core validira {branch_name} policy i dodaje službeni checksum."),
+            &format!(
+                "Bitcoin Core validates the {branch_name} policy and adds the official checksum."
+            ),
             None,
             false,
             traces,
@@ -1481,16 +1502,16 @@ async fn validate_descriptor(
         && result.get("hasprivatekeys").and_then(Value::as_bool) == Some(false);
     if !valid {
         return Err(format!(
-            "STOP: Bitcoin Core nije potvrdio sigurnosne uvjete za {branch_name} descriptor."
+            "STOP: Bitcoin Core did not confirm the security conditions for the {branch_name} descriptor."
         ));
     }
     let checksummed = result
         .get("descriptor")
         .and_then(Value::as_str)
         .filter(|value| value.contains('#'))
-        .ok_or_else(|| "Bitcoin Core nije vratio checksummed descriptor.".to_string())?;
+        .ok_or_else(|| "Bitcoin Core did not return a checksummed descriptor.".to_string())?;
     if contains_private_material(checksummed) {
-        return Err("STOP: validirani descriptor sadrži privatni key materijal.".into());
+        return Err("STOP: The validated descriptor contains private-key material.".into());
     }
     Ok(checksummed.into())
 }
@@ -1506,7 +1527,7 @@ async fn choose_coordinator_name(
             "listwalletdir",
             json!({}),
             None,
-            "Traži slobodno lokalno ime za watch-only coordinator.",
+            "Finds an available local name for the watch-only coordinator.",
             None,
             false,
             traces,
@@ -1530,13 +1551,13 @@ async fn choose_coordinator_name(
             return Ok(candidate);
         }
     }
-    Err("Nije moguće pronaći slobodno sigurno ime za coordinator wallet.".into())
+    Err("Could not find an available safe name for the coordinator wallet.".into())
 }
 
 fn validate_import_result(result: &Value) -> Result<(), String> {
     let entries = result
         .as_array()
-        .ok_or_else(|| "importdescriptors nije vratio očekivana dva rezultata.".to_string())?;
+        .ok_or_else(|| "importdescriptors did not return the expected two results.".to_string())?;
     if entries.len() != 2
         || entries
             .iter()
@@ -1549,12 +1570,12 @@ fn validate_import_result(result: &Value) -> Result<(), String> {
             .map(sanitize_rpc_text)
             .collect::<Vec<_>>();
         let detail = if reasons.is_empty() {
-            "Bitcoin Core nije vratio siguran razlog odbijanja.".into()
+            "Bitcoin Core did not return a safe rejection reason.".into()
         } else {
             reasons.join("; ")
         };
         return Err(format!(
-            "STOP: receive i change descriptor nisu oba uspješno importana. Razlog: {detail}"
+            "STOP: The receive and change descriptors were not both imported successfully. Reason: {detail}"
         ));
     }
     Ok(())
@@ -1564,16 +1585,16 @@ fn validate_label(label: &str) -> Result<(), String> {
     if matches!(label, "K1" | "K2" | "K3") {
         Ok(())
     } else {
-        Err("Signing wallet label mora biti K1, K2 ili K3.".into())
+        Err("The signing-wallet label must be K1, K2, or K3.".into())
     }
 }
 
 fn validate_signer_passphrase(value: &str) -> Result<(), String> {
     if value.chars().count() < 10 {
-        return Err("Wallet lozinka mora imati najmanje 10 znakova.".into());
+        return Err("The wallet passphrase must contain at least 10 characters.".into());
     }
     if value.chars().any(char::is_control) {
-        return Err("Wallet lozinka sadrži nedopušteni kontrolni znak.".into());
+        return Err("The wallet passphrase contains a forbidden control character.".into());
     }
     Ok(())
 }
@@ -1855,7 +1876,7 @@ mod tests {
             finish_mock(server, cookie_path);
             assert!(error.starts_with("PARTIAL CREATION:"));
             assert!(error.contains("CoreVault-K1"));
-            assert!(error.contains("Core wallet nije obrisan"));
+            assert!(error.contains("The Core wallet was not deleted"));
             let methods = method_log.lock().expect("method log should lock").clone();
             assert_eq!(
                 methods,
@@ -1901,7 +1922,7 @@ mod tests {
 
             finish_mock(server, cookie_path);
             assert!(error.starts_with("PARTIAL CREATION:"));
-            assert!(error.contains("privatni key materijal"));
+            assert!(error.contains("private-key material"));
             assert!(!error.contains("tprvTestOnlyPrivateMaterial"));
             assert!(!method_log
                 .lock()
@@ -2053,7 +2074,7 @@ mod tests {
             .expect_err("coordinator must not be created from an unencrypted signer");
 
             finish_mock(server, cookie_path);
-            assert!(error.contains("Coordinator nije stvoren"));
+            assert!(error.contains("The coordinator was not created"));
             assert_eq!(
                 method_log
                     .lock()
@@ -2223,7 +2244,7 @@ mod tests {
                 .expect_err("incomplete finalization must fail closed");
 
             finish_mock(server, cookie_path);
-            assert!(error.contains("nije potvrdio dovoljan broj potpisa"));
+            assert!(error.contains("did not confirm enough signatures"));
             assert!(
                 state.drafts.lock().expect("draft state should lock")["legacy-draft"]
                     .raw_hex
@@ -2390,7 +2411,7 @@ mod tests {
             )
             .await
             .expect_err("finalized transaction without accepted preflight must stop in Rust");
-            assert!(error.contains("Mempool provjera nije izvršena"));
+            assert!(error.contains("The mempool check has not run"));
         });
     }
 
@@ -2419,7 +2440,7 @@ mod tests {
             )
             .await
             .expect_err("cancellation must not authorize broadcast");
-            assert!(error.contains("Broadcast autorizacija nije valjana"));
+            assert!(error.contains("broadcast authorization is invalid"));
         });
     }
 
@@ -2465,7 +2486,7 @@ mod tests {
             )
             .await
             .expect_err("draft-bound authorization must fail before RPC for another draft");
-            assert!(error.contains("Broadcast autorizacija nije valjana"));
+            assert!(error.contains("broadcast authorization is invalid"));
         });
     }
 
@@ -2494,7 +2515,7 @@ mod tests {
             )
             .await
             .expect_err("transaction-bound authorization must fail before RPC after replacement");
-            assert!(error.contains("Broadcast autorizacija nije valjana"));
+            assert!(error.contains("broadcast authorization is invalid"));
         });
     }
 
@@ -2562,7 +2583,7 @@ mod tests {
             .expect_err("disabled Core networking must stop broadcast");
 
             finish_mock(server, cookie_path);
-            assert!(error.contains("network activity disabled"));
+            assert!(error.contains("network activity is disabled"));
             assert_eq!(
                 method_log
                     .lock()
@@ -2587,7 +2608,7 @@ mod tests {
             )
             .await
             .expect_err("stopped attempt must consume its one-time authorization");
-            assert!(replay.contains("Broadcast autorizacija nije valjana"));
+            assert!(replay.contains("broadcast authorization is invalid"));
         });
     }
 
@@ -2638,7 +2659,7 @@ mod tests {
             )
             .await
             .expect_err("failed send must not make authorization reusable");
-            assert!(replay.contains("Broadcast autorizacija nije valjana"));
+            assert!(replay.contains("broadcast authorization is invalid"));
         });
     }
 
@@ -2661,7 +2682,7 @@ mod tests {
             )
             .await
             .expect_err("expired authorization must stop before RPC");
-            assert!(error.contains("Broadcast autorizacija nije valjana"));
+            assert!(error.contains("broadcast authorization is invalid"));
         });
     }
 

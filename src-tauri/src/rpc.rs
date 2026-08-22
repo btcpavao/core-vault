@@ -26,7 +26,7 @@ impl RpcClient {
             .no_proxy()
             .timeout(Duration::from_secs(12))
             .build()
-            .map_err(|_| "Nije moguće inicijalizirati lokalni RPC klijent.".to_string())?;
+            .map_err(|_| "Could not initialize the local RPC client.".to_string())?;
         Ok(Self { settings, http })
     }
 
@@ -43,15 +43,19 @@ impl RpcClient {
     ) -> Result<Value, String> {
         let cookie =
             Zeroizing::new(fs::read_to_string(&self.settings.cookie_path).map_err(|_| {
-                "Bitcoin Core cookie nije moguće pročitati. Provjerite putanju i dozvole."
+                "Could not read the Bitcoin Core cookie. Check the path and permissions."
                     .to_string()
             })?);
         let trimmed = cookie.trim();
-        let (user, password) = trimmed
-            .split_once(':')
-            .ok_or_else(|| "Bitcoin Core cookie nema očekivani lokalni auth format.".to_string())?;
+        let (user, password) = trimmed.split_once(':').ok_or_else(|| {
+            "The Bitcoin Core cookie does not use the expected local authentication format."
+                .to_string()
+        })?;
         if user.is_empty() || password.is_empty() {
-            return Err("Bitcoin Core cookie nema očekivani lokalni auth format.".into());
+            return Err(
+                "The Bitcoin Core cookie does not use the expected local authentication format."
+                    .into(),
+            );
         }
 
         let url = self.endpoint(wallet);
@@ -70,14 +74,15 @@ impl RpcClient {
             .send()
             .await
             .map_err(|_| {
-                "Lokalni Bitcoin Core ne odgovara. Pokrenite ga na Signetu pa pokušajte ponovno."
+                "The local Bitcoin Core instance is not responding. Start it on Signet and try again."
                     .to_string()
             })?;
 
         let status = response.status();
-        let payload: Value = response.json().await.map_err(|_| {
-            "Bitcoin Core vratio je odgovor koji nije valjani JSON-RPC.".to_string()
-        })?;
+        let payload: Value = response
+            .json()
+            .await
+            .map_err(|_| "Bitcoin Core returned an invalid JSON-RPC response.".to_string())?;
         let duration_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
         let visible_arguments = trace_arguments
             .unwrap_or_else(|| request.get("params").cloned().unwrap_or_else(|| json!({})));
@@ -93,7 +98,7 @@ impl RpcClient {
                 duration_ms,
                 timestamp_ms: now_unix_ms(),
             });
-            return Err(format!("Bitcoin Core RPC nije uspio: {message}"));
+            return Err(format!("Bitcoin Core RPC failed: {message}"));
         }
 
         if let Some(error) = payload.get("error").filter(|value| !value.is_null()) {
@@ -107,12 +112,12 @@ impl RpcClient {
                 duration_ms,
                 timestamp_ms: now_unix_ms(),
             });
-            return Err(format!("Bitcoin Core RPC nije uspio: {message}"));
+            return Err(format!("Bitcoin Core RPC failed: {message}"));
         }
 
         let result = payload.get("result").cloned().unwrap_or(Value::Null);
         let trace_result = if hide_result {
-            json!({ "hidden": "Osjetljivi transaction payload nije prikazan." })
+            json!({ "hidden": "The sensitive transaction payload is not displayed." })
         } else {
             result.clone()
         };
@@ -155,7 +160,7 @@ pub async fn inspect_core(
             "getblockchaininfo",
             json!({}),
             None,
-            "Provjerava mrežu lokalnog Bitcoin Corea prije bilo koje wallet operacije.",
+            "Checks the local Bitcoin Core network before any wallet operation.",
             None,
             false,
             traces,
@@ -166,7 +171,7 @@ pub async fn inspect_core(
             "getnetworkinfo",
             json!({}),
             None,
-            "Čita verziju lokalnog Bitcoin Corea.",
+            "Reads the local Bitcoin Core version.",
             None,
             false,
             traces,
@@ -178,7 +183,7 @@ pub async fn inspect_core(
             "getmempoolinfo",
             json!({}),
             None,
-            "Čita sažetak lokalnog mempoola bez vanjskog servisa.",
+            "Reads the local mempool summary without an external service.",
             None,
             false,
             traces,
@@ -217,14 +222,14 @@ pub async fn inspect_core(
     );
     let supported = supported_chain && wallet_rpc_available && version.unwrap_or(0) >= 260_000;
     let message = if !supported_chain {
-        "Bitcoin Core koristi nepoznatu mrežu. Wallet mutacije su zaustavljene.".into()
+        "Bitcoin Core is using an unknown network. Wallet mutations have been stopped.".into()
     } else if !wallet_rpc_available {
-        "Bitcoin Core je dostupan, ali wallet RPC nije uključen.".into()
+        "Bitcoin Core is available, but wallet RPC is not enabled.".into()
     } else if version.unwrap_or(0) < 260_000 {
         "Core Vault V1 zahtijeva Bitcoin Core 26 ili noviji.".into()
     } else {
         format!(
-            "Lokalni Bitcoin Core dostupan je na mreži {}.",
+            "The local Bitcoin Core instance is available on {}.",
             chain_label(&chain)
         )
     };
@@ -300,9 +305,9 @@ pub async fn set_network_active(
             json!({ "state": active }),
             None,
             if active {
-                "Uključuje Bitcoin Core P2P mrežnu aktivnost."
+                "Enables Bitcoin Core P2P network activity."
             } else {
-                "Isključuje Bitcoin Core P2P mrežnu aktivnost; računalo nije time dokazano air-gapped."
+                "Disables Bitcoin Core P2P network activity. This does not prove that the computer is air-gapped."
             },
             None,
             false,
@@ -310,7 +315,7 @@ pub async fn set_network_active(
         )
         .await?;
     if result.as_bool() != Some(active) {
-        return Err("Bitcoin Core nije potvrdio traženo stanje P2P mreže.".into());
+        return Err("Bitcoin Core did not confirm the requested P2P network state.".into());
     }
     inspect_core(client.settings.clone(), traces).await
 }
@@ -324,7 +329,7 @@ pub async fn ensure_test_chain(
             "getblockchaininfo",
             json!({}),
             None,
-            "Potvrđuje testnu mrežu neposredno prije wallet mutacije.",
+            "Confirms the test network immediately before a wallet mutation.",
             None,
             false,
             traces,
@@ -337,7 +342,7 @@ pub async fn ensure_test_chain(
     if matches!(chain, "signet" | "test" | "testnet4" | "regtest") {
         Ok(chain.to_string())
     } else {
-        Err("STOP: Experimentalni build dopušta wallet mutacije samo na Signetu, Testnetu 4 ili Regtestu.".into())
+        Err("STOP: This experimental build allows wallet mutations only on Signet, Testnet4, or Regtest.".into())
     }
 }
 
@@ -347,7 +352,7 @@ pub async fn ensure_signet(client: &RpcClient, traces: &mut Vec<RpcTrace>) -> Re
             "getblockchaininfo",
             json!({}),
             None,
-            "Ponovno potvrđuje Signet neposredno prije wallet operacije.",
+            "Confirms Signet again immediately before a wallet operation.",
             None,
             false,
             traces,
@@ -356,10 +361,7 @@ pub async fn ensure_signet(client: &RpcClient, traces: &mut Vec<RpcTrace>) -> Re
     if is_signet_info(&info) {
         Ok(())
     } else {
-        Err(
-            "STOP: Bitcoin Core više nije na Signetu. Nijedna wallet promjena nije napravljena."
-                .into(),
-        )
+        Err("STOP: Bitcoin Core is no longer on Signet. No wallet changes were made.".into())
     }
 }
 
@@ -446,7 +448,7 @@ fn rpc_error_message(value: &Value) -> String {
             .get("message")
             .and_then(Value::as_str)
             .or_else(|| value.as_str())
-            .unwrap_or("nepoznata lokalna RPC pogreška"),
+            .unwrap_or("unknown local RPC error"),
     )
 }
 
@@ -547,7 +549,7 @@ mod tests {
                 .expect_err("mainnet must be rejected");
 
             assert!(error.starts_with("STOP:"));
-            assert!(error.contains("nije na Signetu"));
+            assert!(error.contains("no longer on Signet"));
             assert_eq!(traces.len(), 1);
 
             server.join().expect("mock RPC server should finish");

@@ -1,230 +1,97 @@
-# Core Vault UI — Bitcoin Design research
+# Core Vault UI Bitcoin Design research
 
-Datum pregleda: 12. kolovoza 2026.
+Review date: August 12, 2026
 
-## Opseg i autoritet
+## Scope and authority
 
-Primarni UX autoritet za Core Vault je [Bitcoin Design Guide](https://bitcoin.design/guide/),
-uz službeni [BitcoinDesign/Guide repository](https://github.com/BitcoinDesign/Guide),
-referentne flowove, dostupne Figma prototipe i Bitcoin Core App case study. Guide je
-evoluirajući community resurs, pa su otvoreni issueovi tretirani kao aktivne rasprave, a ne
-kao završena pravila. Sigurnosni invarijanti, ponašanje Bitcoin Corea i local-only model
-imaju prednost kada nastane konflikt.
+The primary UX reference for Core Vault is the [Bitcoin Design Guide](https://bitcoin.design/guide/), together with the official [BitcoinDesign/Guide repository](https://github.com/BitcoinDesign/Guide), reference flows, available Figma prototypes, and the Bitcoin Core App case study. The Guide is an evolving community resource, so open issues are treated as active discussions rather than final rules. Security invariants, Bitcoin Core behavior, and the local-only model take precedence when they conflict with design guidance.
 
-Pregledani su konkretni ekrani i prijelazi za Bitcoin Core wallet creation, savings
-onboarding, inheritance wallet creation, cosigner onboarding, multi-key backup,
-transaction review, signing, recovery, key replacement i succession. Figma datoteke koje
-Guide povezuje potvrđene su kao dostupne, ali njihov sadržaj niti asseti nisu kopirani.
+The review covered wallet creation, savings and inheritance onboarding, cosigner onboarding, multi-key backup, transaction review, signing, recovery, key replacement, and succession. Linked Figma files were confirmed as available, but Core Vault copied neither their content nor their assets.
 
 ## Relevant Bitcoin Design principles
 
-| Princip | Što znači | Izvor | Relevancija za Core Vault | Primjena |
-| --- | --- | --- | --- | --- |
-| Self-custody | Korisnik zadržava kontrolu; proizvod ne uvodi skrbnika. | [Design principles](https://bitcoin.design/guide/getting-started/principles/) | Core Vault ne smije postati wallet ni signer. | Bitcoin Core jedini drži i koristi ključeve; UI je zamjenjiv coordinator. |
-| Security | Sigurnost je uporabljiv proces, ne skrivena postavka; dodatna zaštita opravdava ciljanu frikciju. | [Design principles](https://bitcoin.design/guide/getting-started/principles/), [Wallet security](https://bitcoin.design/guide/daily-spending-wallet/security/) | Multisig povećava sigurnost samo ako korisnik razumije i napravi sve backupe. | Linearni checkpointovi, tehnički hard stopovi, razumljive posljedice gubitka jednog ili dvaju ključeva. |
-| Inclusion | Plain language i pomoć moraju biti dostupni bez pretpostavke o descriptorima, RPC-u ili PSBT-u. | [Design principles](https://bitcoin.design/guide/getting-started/principles/), [Accessibility](https://bitcoin.design/guide/designing-products/accessibility/) | Persona zna obični Core wallet, ali ne multisig termine. | “Signing wallet”, “vault”, “approval” i “public configuration” prije tehničkih naziva; tehnički termini su u Advanced panelu. |
-| Interoperability | Otvoreni standardi, import/export i mogućnost izlaska grade povjerenje i sprječavaju lock-in. | [Interoperability](https://bitcoin.design/guide/designing-products/interoperability/) | Gubitak Core Vault aplikacije ne smije ugroziti setup. | Standardni checksummed descriptori, javna dokumentirana JSON schema, Bitcoin Core wallet backup i budući PSBT file/QR adapteri. |
-| Transparency | Korisnik treba razumjeti tko ima kontrolu i moći provjeriti što aplikacija radi. | [Design principles](https://bitcoin.design/guide/getting-started/principles/), [Bitcoin Core App case study](https://bitcoin.design/guide/case-studies/bitcoin-core-app/) | “Jednostavno izvana, Core transparentno iznutra” je glavni proizvodni princip. | Svaki veći korak ima kratko objašnjenje i proširivi, sanitizirani RPC zapis s metodom, relevantnim argumentima i rezultatom. |
-| Privacy | Privatnost je default; prikazuje se i dijeli samo nužno. | [Wallet privacy](https://bitcoin.design/guide/how-it-works/wallet-privacy/) | Balance, adrese, fingerprinti, tpubovi i descriptori otkrivaju wallet metadata. | Skriven balance, adrese samo u receive/review kontekstu, descriptor/fingerprint samo u Advanced, bez trećih strana, explorera, analyticsa ili telemetryja. |
-| Decentralization | Ne stvarati obveznog posrednika ili vlastiti servis između korisnika i mreže. | [Design principles](https://bitcoin.design/guide/getting-started/principles/) | Cloud coordinator bi promijenio threat model. | Samo lokalni Core RPC i lokalni broadcast; aplikacija nema backend servis. |
-| Progressive security | Za štednju je prihvatljiva veća frikcija, ali treba odgovarati iskustvu i vrijednosti. | [Savings wallet](https://bitcoin.design/guide/savings-wallet/), [Private key schemes](https://bitcoin.design/guide/how-it-works/private-key-management/overview/) | 2-of-3 je zahtjevniji od single-siga i nije univerzalni početni wallet. | Jasno ga predstavljamo kao Signet vježbu za korisnika koji već zna obični Core wallet; V1 ne tvrdi da je setup spreman za stvarni bitcoin. |
-| Research-led design | Uspjeh se mjeri zadovoljenom potrebom i razumijevanjem, ne količinom funkcija. | [Conducting research](https://bitcoin.design/guide/designing-products/user-research/), [Usage life cycle](https://bitcoin.design/guide/designing-products/usage-life-cycle/) | Glavna hipoteza je ponašajna: može li korisnik sigurno završiti bez Debug Consolea? | Jedna test persona, konkretan end-to-end zadatak, observation plan i comprehension kriterij u `USER_TEST_PLAN.md`. |
+| Principle | Meaning and relevance | Core Vault application |
+| --- | --- | --- |
+| Self-custody | The user keeps control; Core Vault must not become a custodian or signer. | Bitcoin Core alone holds and uses keys. The UI is a replaceable coordinator. |
+| Security | Security is a usable process. Multisig helps only when users understand it and complete every backup. | Linear checkpoints, technical hard stops, and explicit consequences of losing one or two keys. |
+| Inclusion | Plain language must work without knowledge of descriptors, RPC, or PSBTs. | Lead with signing wallet, vault, approval, and public configuration. Put technical names in Advanced. |
+| Interoperability | Open standards and an exit path prevent lock-in. | Checksummed descriptors, a documented public JSON schema, Core wallet backups, and room for file or QR PSBT adapters. |
+| Transparency | Users should know who controls funds and be able to inspect application behavior. | Each major step has a short explanation and a sanitized expandable RPC trace. |
+| Privacy | Show and share only what the current task needs. | Hide balances, limit address display, keep descriptors and fingerprints in Advanced, and make no analytics, explorer, or third-party calls. |
+| Decentralization | Do not add a mandatory intermediary between the user and Bitcoin. | Use only local Core RPC and local broadcast. Core Vault has no service backend. |
+| Progressive security | Extra friction may fit savings, but 2-of-3 is not a universal beginner wallet. | Present V1 as a Signet exercise for someone who already knows a standard Core wallet. Never call it ready for real bitcoin. |
+| Research-led design | Measure fulfilled needs and understanding, not feature count. | Use one target participant, one end-to-end task, observations, and comprehension criteria in `USER_TEST_PLAN.md`. |
 
-## Vizualni jezik
+Sources include [Design principles](https://bitcoin.design/guide/getting-started/principles/), [Wallet security](https://bitcoin.design/guide/daily-spending-wallet/security/), [Accessibility](https://bitcoin.design/guide/designing-products/accessibility/), [Interoperability](https://bitcoin.design/guide/designing-products/interoperability/), [Wallet privacy](https://bitcoin.design/guide/how-it-works/wallet-privacy/), [Savings wallet](https://bitcoin.design/guide/savings-wallet/), and [Conducting research](https://bitcoin.design/guide/designing-products/user-research/).
 
-[Visual language](https://bitcoin.design/guide/getting-started/visual-language/) naglašava da ne
-postoji jedna obvezna Bitcoin estetika. Core Vault zato ne kopira narančastu bitcoin.design
-stranicu, Figma UI kit ni ilustracije. Vlastiti identitet je tih, topao i profesionalan:
-neutralne površine, jedna prigušena Bitcoin narančasta kao akcijski akcent, jasna tipografska
-hijerarhija i funkcionalni line-art simboli za sredstva, signing wallete i policy.
+## Visual language
 
-Stvarni referentni ekrani pokazali su korisne strukturne obrasce:
+The [Visual language](https://bitcoin.design/guide/getting-started/visual-language/) section rejects the idea of one mandatory Bitcoin aesthetic. Core Vault therefore does not copy bitcoin.design orange, its Figma UI kit, or its illustrations. The product uses warm neutral surfaces, one muted orange action color, clear typography, and functional line-art symbols for funds, signing wallets, and policy.
 
-- Bitcoin Core App flow map eksplicitno modelira odluke, napredne grane, uspjeh i greške,
-  umjesto samo sretnog puta.
-- Multi-key backup grafika razdvaja “private key backups” i “wallet configuration” kao dva
-  nužna, ali sigurnosno različita artefakta.
-- Transaction review ekran stavlja iznos, primatelja i fee u tri čitljive cjeline s
-  mogućnošću uređivanja prije jednog primary CTA-a.
-- Signing ekran govori “2 signatures required” i prikazuje pojedine signere kao slotove sa
-  statusom ili radnjom, umjesto da od korisnika traži razumijevanje PSBT-a.
+Reference screens support four structural choices. Flow maps include decisions and failure states, not only the happy path. Multi-key backup separates private-key backups from wallet configuration. Transaction review separates amount, recipient, and fee and permits edits before one primary CTA. Signing presents signer slots and a required-signature count instead of requiring the user to understand PSBTs.
 
-## Mentalni model Core Vaulta
+## Core Vault mental model
 
-Default sloj uvijek uči ovaj redoslijed:
+The default layer teaches concepts in this order:
 
-1. **Signing wallet** drži jedan ključ i Bitcoin Core ga koristi za potpis.
-2. **Vault** je pravilo: bilo koja dva od tri ključa mogu potrošiti bitcoin.
-3. **Coordinator** prati vault i priprema transakcije, ali nema privatni ključ.
-4. **Transaction approval** je potpis jednog signing walleta; dva odobrenja dovršavaju transakciju.
+1. A **signing wallet** holds one key that Bitcoin Core uses to sign.
+2. A **vault** is a rule under which any two of three keys can spend.
+3. A **coordinator** watches the vault and prepares transactions but has no private key.
+4. A **transaction approval** is one signing-wallet signature. Two approvals complete the transaction.
 
-Descriptor, tpub, fingerprint, derivation path, PSBT, witness script i RPC nisu preduvjeti
-za odluku. Ostaju potpuno provjerljivi u Advanced sloju.
+Descriptors, tpubs, fingerprints, derivation paths, PSBTs, witness scripts, and RPC are not prerequisites for a decision. They remain inspectable in Advanced.
 
 ## Reference-flow observations
 
-### Onboarding
+**Onboarding and wallet creation.** The [usage life cycle](https://bitcoin.design/guide/designing-products/usage-life-cycle/) calls for a fast, trustworthy mental model and answers to "what can I lose?" and "can I leave?" Core Vault starts with the Personal Vault story and then shows 2-of-3. Savings and inheritance flows show the whole key setup before moving through one key per screen. Before finalization, Core Vault shows every key and states that one lost key is tolerable while two can lock the funds. V1 offers only `Personal Vault, 2-of-3 Native SegWit`; future templates should be story-first.
 
-- [Usage life cycle](https://bitcoin.design/guide/designing-products/usage-life-cycle/) traži
-  brzo formiranje pouzdanog mentalnog modela i odgovore na “što mogu izgubiti?” i “mogu li
-  izaći?”. Početni ekran zato prvo priča “Personal Vault” priču, zatim pokazuje 2-of-3.
-- [Savings wallet onboarding](https://bitcoin.design/guide/savings-wallet/) unaprijed pokazuje
-  cijeli key setup i zatim obrađuje jedan ključ po ekranu. Core Vault koristi isti linearni
-  ritam, bez upfront predavanja o descriptorima.
-- [Bitcoin Core App case study](https://bitcoin.design/guide/case-studies/bitcoin-core-app/)
-  segmentira nove, povremene, iskusne i developer korisnike. Naša persona je između
-  povremenog i iskusnog: poznaje Core GUI, ali nije multisig developer.
+**Backup and multi-key setup.** [Bitcoin backups](https://bitcoin.design/guide/how-it-works/backups/) defines a backup as the information needed to recover outside the application. Inheritance guidance separates private-key backups from descriptor configuration. The latter cannot spend, but it is necessary for reconstruction and can track the entire wallet. Because [issue #1057](https://github.com/BitcoinDesign/Guide/issues/1057) leaves physical descriptor-backup guidance open, V1 creates local Core wallet backups plus an open public JSON file and explains the difference. K1, K2, K3, and the public configuration form a blocking checkpoint. Keys, fingerprints, tpubs, and derivation data must be distinct and backed up; private keys are never exchanged.
 
-### Wallet creation
+**Signing.** Cosigner and inheritance flows separate configuration import from signer activation, show signer slots, and reveal PSBT transfer only when needed. Core Vault abstracts this as **Add signature**. V1 uses a local Bitcoin Core wallet underneath, while future adapters may use a PSBT file, USB, or QR without changing the information architecture.
 
-- [Inheritance wallet creation](https://bitcoin.design/guide/inheritance-wallet/wallet-creation/)
-  koristi tri velika zadatka: konfiguracija, dodavanje ključeva, review/finalize. Unutar
-  zadatka key slotovi jasno pokazuju što nedostaje.
-- Prije finalizacije pokazuje se kompletno pravilo i svi ključevi. Core Vault dodaje
-  eksplicitne posljedice: jedan izgubljeni ključ je toleriran; dva mogu zaključati sredstva.
-- Budući templateovi trebaju biti story-first (`Personal Vault`, `Family Vault`,
-  `Business Treasury`, `Recovery Vault`, `Inheritance Vault`), ali V1 prikazuje samo
-  `Personal Vault — 2-of-3 Native SegWit`.
+**Send and receive.** [Sending bitcoin](https://bitcoin.design/guide/daily-spending-wallet/sending/) supports simple recipient and amount entry, a visible fee, and mandatory review. Core Vault shows amount, destination, network fee, estimated remainder, and `2 of 3 approvals`. It uses sats as the primary unit and BTC secondarily, with no fiat API. [Receiving guidance](https://bitcoin.design/guide/daily-spending-wallet/requesting/receiving/) treats waiting as a state. Core Vault generates a new coordinator address on request, hides it elsewhere, and never sends it to an explorer.
 
-### Backup
-
-- [Bitcoin backups](https://bitcoin.design/guide/how-it-works/backups/) definira backup kao
-  informacije potrebne za obnovu izvan aplikacije i naglašava threat-model ovisnu strategiju.
-- [Inheritance wallet backup](https://bitcoin.design/guide/inheritance-wallet/backup/)
-  jasno razdvaja privatne key backupe od descriptor konfiguracije. Konfiguracija ne može
-  trošiti, ali je kritična za rekonstrukciju i privatnosno je osjetljiva jer omogućuje
-  praćenje cijelog walleta.
-- Otvoreni [issue #1057](https://github.com/BitcoinDesign/Guide/issues/1057) potvrđuje da se
-  detaljna preporuka za descriptor/multisig config backup još razmatra. V1 zato ne propisuje
-  fizičku strategiju: izrađuje lokalne Core wallet backupe, otvoreni public JSON i jasno
-  objašnjava razliku.
-- Backup je blokirajući creation checkpoint: K1, K2, K3 i public config moraju biti označeni
-  dovršenima prije receive testa.
-
-### Multi-key setup
-
-- [Multi-key](https://bitcoin.design/guide/how-it-works/private-key-management/multi-key/)
-  traži različite ključeve, backup svakog ključa te backup svih extended public keys,
-  fingerprinta i derivacijskih podataka. Private key se ne razmjenjuje.
-- [Shared wallet](https://bitcoin.design/guide/shared-wallet/) daje kratak welcome,
-  objašnjenje sheme, vizualni napredak svakog ključa i eksplicitnu završnu potvrdu.
-- Signing walleti su vizualno isti tip objekta; vault policy je zasebna centralna pločica;
-  coordinator je treća vrsta objekta i nikad se ne prikazuje kao “četvrti ključ”.
-
-### Cosigner onboarding i signing
-
-- [Cosigner onboarding](https://bitcoin.design/guide/inheritance-wallet/onboarding-cosigners/)
-  razlikuje import konfiguracije od aktivacije signera i koristi contextual task list.
-- [Inheritance signing flow](https://bitcoin.design/guide/inheritance-wallet/making-changes/)
-  prikazuje transaction detail, tri signer slota, broj prikupljenih potpisa te PSBT sharing
-  tek kada je potreban. To je temelj apstrakcije **Add signature**.
-- V1 metoda ispod apstrakcije je “Local Bitcoin Core wallet”. Budući adapteri su “PSBT
-  file”, “USB” i “QR”; informacijska arhitektura ne pretpostavlja da je signer zauvijek lokalni.
-
-### Transaction creation i review
-
-- [Sending bitcoin](https://bitcoin.design/guide/daily-spending-wallet/sending/) traži
-  jednostavan unos primatelja i iznosa, transparentan fee te obvezan review prije finalnog
-  pristanka. Napredne opcije ne pripadaju default flowu.
-- Review prikazuje: iznos, odredište, network fee, procijenjeni ostatak i “2 of 3 approvals”.
-  Address se može proširiti/kopirati, ali se ne očekuje validacija raw PSBT-a.
-- [Units & symbols](https://bitcoin.design/guide/designing-products/units-and-symbols/)
-  predlaže dosljedne jedinice, čitljive grupe i tabularne/monospace brojke. Signet test koristi
-  sats kao primarnu, BTC kao sekundarnu vrijednost; nema fiat API-ja.
-
-### Receiving
-
-- [Receiving bitcoin](https://bitcoin.design/guide/daily-spending-wallet/requesting/receiving/)
-  tretira čekanje kao stanje, ne kao novu korisničku radnju.
-- [Wallet privacy](https://bitcoin.design/guide/how-it-works/wallet-privacy/) preporučuje novu
-  adresu za svaki receive. Core Vault generira novu coordinator adresu na eksplicitni zahtjev,
-  skriva je na drugim ekranima i ne šalje je exploreru.
-
-### Recovery i inheritance
-
-- [Succession](https://bitcoin.design/guide/inheritance-wallet/succession/) pokazuje da
-  recovery počinje ljudskim uputama i wallet konfiguracijom, zatim aktivacijom signera, tek
-  potom transakcijom. Tehnologija bez dokumentacije i društvenog procesa nije recovery plan.
-- [Making changes](https://bitcoin.design/guide/inheritance-wallet/making-changes/) tretira
-  key replacement kao novi wallet + novi backup + prijenos sredstava, a promjene su jasno
-  istaknute u reviewu.
-- V1 ne implementira recovery/import ni inheritance. Design system ipak koristi policy,
-  signer i timeline komponente koje se kasnije mogu proširiti bez izlaganja script jezika.
-
-### Error recovery
-
-- [Sending errors](https://bitcoin.design/guide/daily-spending-wallet/sending/#errors) traži:
-  što se dogodilo, status sredstava, kako popraviti i što dalje.
-- Otvoreni [issue #505](https://github.com/BitcoinDesign/Guide/issues/505) dodatno predlaže
-  razlikovanje user, data, service i application problema te jasne action kategorije.
-- Svaka Core Vault greška ima tri sloja: plain-language problem, rečenicu “sredstva su
-  sigurna / transakcija nije poslana” kada je istinita, i jednu sljedeću radnju. Izvorni RPC
-  code/message je u Advanced panelu.
+**Recovery and errors.** Succession guidance starts recovery with human instructions and wallet configuration, then activates signers, then creates a transaction. V1 does not implement recovery, import, or inheritance, but its policy, signer, and timeline components leave room for them. Errors state what happened, whether funds are safe or a transaction was sent, and one next action. Raw RPC details stay in Advanced.
 
 ## Core Vault mapping
 
-| Core Vault ekran | Bitcoin Design pattern | Konkretna primjena |
-| --- | --- | --- |
-| Welcome / Create Vault | usage life cycle + savings/shared onboarding | Vault story, 2-of-3 dijagram, Signet ograničenje, jedan CTA |
-| Bitcoin Core connection | transparency + usable security | Connected locally, Signet, no remote servers, telemetry off, private keys handled by Core |
-| Create K1/K2/K3 | linear key-slot onboarding | jedan signing wallet po koraku; create → encrypt → ready; detalji progresivno |
-| Vault review | wallet creation finalize | sva tri signera, 2-of-3 posljedice i razumljivi confirmation CTA |
-| Create coordinator | multi-key mental model | zaseban watch-only objekt bez ključa; descriptor samo Advanced |
-| Backup checkpoint | multi-key backup components | K1/K2/K3 private-capability backupi odvojeni od privacy-sensitive public configa |
-| Receive test | receiving + privacy | nova Signet adresa, skriven balance, lokalna provjera primitka |
-| Create transaction | simple send flow | recipient, sats, fee rate; bez coin controla i PSBT stringa |
-| Review transaction | review & approval | amount, destination, fee, remaining, required approvals; edit prije potpisa |
-| Add signature | multi-key signer slots | tri signing walleta, status potpisa, “needs one more signature”; local Core metoda |
-| Broadcast | final consent + success | ponovni sažetak prije nepovratne radnje, lokalni txid nakon uspjeha |
-| Advanced RPC | progressive disclosure + transparency | metoda, redigirani argumenti, rezultat i plain-language tumačenje |
-| Errors | payment error recovery | problem, sigurnost sredstava, sljedeća radnja, RPC detalj |
+| Screen | Applied pattern |
+| --- | --- |
+| Welcome | vault story, 2-of-3 diagram, Signet limit, one CTA |
+| Core connection | local connection, Signet, no remote server, telemetry off, keys handled by Core |
+| K1/K2/K3 | one signing wallet per step, create then encrypt then ready |
+| Vault review | all signers, 2-of-3 consequences, clear confirmation |
+| Coordinator | separate watch-only object, descriptor only in Advanced |
+| Backup | three signing-capability backups separate from privacy-sensitive public configuration |
+| Receive | fresh Signet address, hidden balance, local payment check |
+| Create and review transaction | recipient, sats, fee, remainder, approvals, editing before signatures |
+| Add signature | three signer slots and local Core signing without visible PSBT data |
+| Broadcast | repeated summary before the irreversible action and a locally returned txid |
+| Advanced RPC | method, redacted arguments and result, plain explanation |
+| Errors | problem, funds status, next action, optional RPC details |
 
 ## Deliberate deviations
 
-| Guide ili reference pattern | Core Vault V1 | Razlog |
-| --- | --- | --- |
-| Multi-key best practice očekuje barem jedan ključ na odvojenom uređaju; inheritance i savings flowovi preferiraju hardware signere. | K1/K2/K3 su odvojeni walleti na istom lokalnom Bitcoin Coreu. | Ovo je isključivo Signet eksperiment koji dokazuje GUI orkestraciju. UI jasno ne tvrdi da tri walleta na istom stroju uklanjaju device single point of failure. Hardware wallet je V1 non-goal. |
-| Neki reference flowovi dopuštaju preskočiti backup i kasnije prikazuju reminder. | Setup se ne može proglasiti dovršenim bez sva četiri backupa. | Projektni sigurnosni ustav zahtijeva first-class backup checkpoint; kasniji reminder nije dovoljna zaštita za eksperimentalni multisig. |
-| Guide za on-chain često preporučuje BTC kao default jedinicu i fiat kontekst. | Spend test koristi sats primarno i BTC sekundarno, bez fiat prikaza. | Mali Signet testni iznosi čitljiviji su u satima; local-only model zabranjuje exchange-rate API. |
-| Reference walleti nude mnogo templateova i custom konfiguraciju. | V1 prikazuje samo Personal Vault 2-of-3 Native SegWit. | Uži opseg smanjuje sigurnosnu i testnu površinu; budući templateovi ostaju informacijski extension pointovi. |
-| Reference signing flowovi prenose PSBT između osoba preko QR-a ili chata. | V1 dva potpisa prikuplja iz lokalnih Core walleta bez ručnog prijenosa. | Najjednostavniji put za hipotezu V1. UI koristi generički “Add signature” kako file/USB/QR ne bi zahtijevali redizajn. |
-| Neki Advanced reference primjeri dopuštaju prikaz/copy raw PSBT-a i finalnog hexa. | V1 Advanced trace prikazuje metodu i Core rezultat, ali transaction payload ostaje redigiran i samo u Rust memoriji. | Stroži local prototype model smanjuje slučajno curenje u clipboard, screenshot ili browser state; budući file/QR adapter mora imati zaseban threat-model review. |
-| Guide može ponuditi block-explorer link nakon slanja. | Core Vault prikazuje lokalno vraćeni txid bez vanjskog linka. | Nema third-party poziva ni curenja wallet metadata; Bitcoin Core ostaje source of truth. |
-| Public wallet konfiguracija u nekim flowovima izgleda kao običan shareable recovery kit. | Export ima privacy upozorenje i descriptori su skriveni iz default UI-ja. | Descriptor ne može potrošiti, ali omogućuje praćenje cjelokupne povijesti i budućih aktivnosti. |
-| Reference designovi često podržavaju save-and-resume. | V1 ne persistira setup session ni passphrase. | Manje osjetljivog lokalnog statea i jednostavniji audit. Core walleti i backup datoteke postoje neovisno, ali wizard session se ponovnim pokretanjem ne obnavlja automatski. |
+- All three V1 signing wallets live in one local Core instance. This proves GUI coordination on Signet but does not remove a device-level single point of failure. Hardware wallets are outside V1.
+- Setup cannot finish without all four backups. A later reminder is too weak for this experiment.
+- Small Signet values use sats first and BTC second, without fiat data.
+- V1 offers one fixed policy instead of templates and custom configuration to keep the security and test surface narrow.
+- V1 collects two signatures from local Core wallets without manual PSBT transfer. The generic `Add signature` label leaves room for later adapters.
+- The Advanced trace keeps PSBT and raw transaction data redacted in Rust memory. This reduces clipboard, screenshot, and browser-state leaks.
+- Success shows a local txid without an explorer link.
+- Public configuration carries a privacy warning because it can track past and future wallet activity.
+- V1 does not persist the setup session or a passphrase. Core wallets and backup files survive independently, but the wizard does not resume automatically.
 
-## Aktualni repository signali
+## Current repository signals
 
-Službeni repository na dan pregleda ima odvojene `guide/` sadržaje, `assets/` referentne
-ekrane te Apache-2.0, MIT i CC-BY licence. [Design source files](https://bitcoin.design/guide/resources/design-files/)
-navode da su design datoteke CC-BY i slobodne za osobnu i komercijalnu uporabu uz
-attribution. Core Vault u V1 ne preuzima nijedan Guide asset, ilustraciju ni komponentu,
-pa UI ne zahtijeva asset attribution; research dokument i dalje navodi izvore.
+At review time, the official repository separated guide content from reference assets and used Apache-2.0, MIT, and CC-BY licenses. [Design source files](https://bitcoin.design/guide/resources/design-files/) are available for personal and commercial use with attribution. Core Vault uses no Guide asset, illustration, or component, so the UI needs no asset attribution. This research document still cites its sources.
 
-Relevantni otvoreni issueovi:
+Relevant open work includes [#1057 on descriptor and multisig backups](https://github.com/BitcoinDesign/Guide/issues/1057), [#1106 on test transactions](https://github.com/BitcoinDesign/Guide/issues/1106), [#505 on error states](https://github.com/BitcoinDesign/Guide/issues/505), [#778 on shared wallets](https://github.com/BitcoinDesign/Guide/issues/778), [#59 on external signers](https://github.com/BitcoinDesign/Guide/issues/59), [#1197 on graduated wallets](https://github.com/BitcoinDesign/Guide/issues/1197), and [#1113 on research guidance](https://github.com/BitcoinDesign/Guide/issues/1113). These issues support the direction but are not final product requirements.
 
-- [#1057 — descriptor i multi-sig config backup](https://github.com/BitcoinDesign/Guide/issues/1057):
-  kanal i oblik backup preporuke još nisu zaključeni.
-- [#1106 — test transactions](https://github.com/BitcoinDesign/Guide/issues/1106): testna
-  transakcija je prepoznat trust-building pattern, ali Guide sadržaj još nije finaliziran.
-- [#505 — error states](https://github.com/BitcoinDesign/Guide/issues/505): formalna opća
-  taksonomija grešaka još je otvorena; postojeće sending smjernice ipak daju jasan minimum.
-- [#778 — Shared wallet revision](https://github.com/BitcoinDesign/Guide/issues/778) i
-  [#59 — External signers revision](https://github.com/BitcoinDesign/Guide/issues/59):
-  relevantne reference nisu završna riječ; lokalni signer flow ostaje modularan.
-- [#1197 — graduated wallet](https://github.com/BitcoinDesign/Guide/issues/1197): potvrđuje
-  smjer story/template/progressive-security arhitekture, ali nije V1 funkcionalnost.
-- [#1113 — research section revision](https://github.com/BitcoinDesign/Guide/issues/1113):
-  korisničko istraživanje i dalje se reorganizira; naš uski test plan ostaje vezan uz
-  konkretnu personu i end-to-end zadatak.
+## V1 design decision test
 
-## Design odluka za V1
+Apply this question to every decision:
 
-Za svaku odluku primjenjuje se ovaj test:
+> Can we remove complexity from the user's task without removing their ability to understand and verify what Bitcoin Core does?
 
-> Možemo li ukloniti kompleksnost iz korisnikova zadatka bez uklanjanja njegove sposobnosti
-> da razumije i provjeri što Bitcoin Core radi?
-
-Ako da, default UI koristi plain language i jedan CTA. Ako bi skrivanje uklonilo razumijevanje
-kritične sigurnosne odluke, informacija ostaje vidljiva. Ako je tehnička informacija važna
-za audit, ali ne za trenutačnu odluku, dostupna je u Advanced sloju.
+If yes, the default UI uses plain language and one CTA. Information stays visible when hiding it would weaken understanding of a critical security decision. Technical information needed for audit but not for the current decision belongs in Advanced.

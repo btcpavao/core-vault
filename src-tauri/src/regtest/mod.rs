@@ -489,7 +489,7 @@ mod tests {
         .await
         .expect_err("stage: broadcast before preflight must fail");
         assert!(
-            early_broadcast.contains("Mempool provjera nije izvršena"),
+            early_broadcast.contains("The mempool check has not run"),
             "stage: broadcast-before-preflight gate"
         );
 
@@ -572,7 +572,7 @@ mod tests {
         .await
         .expect_err("stage: consumed authorization replay must fail");
         assert!(
-            replay_error.contains("Broadcast autorizacija nije valjana"),
+            replay_error.contains("broadcast authorization is invalid"),
             "stage: one-time authorization"
         );
 
@@ -1030,7 +1030,7 @@ mod tests {
             vault::finalize_multisig_spend(client.clone(), &state, proposal.data.draft_id.clone())
                 .await
                 .expect_err("stage: zero-signature finalization must fail");
-        assert!(zero_finalize.contains("još potpisa"));
+        assert!(zero_finalize.contains("more signatures"));
         let zero_confirmer = ExpectedBroadcastConfirmer::for_network(
             MULTISIG_COORDINATOR,
             &destination,
@@ -1122,7 +1122,7 @@ mod tests {
             vault::finalize_multisig_spend(client.clone(), &state, proposal.data.draft_id.clone())
                 .await
                 .expect_err("stage: one-signature finalization must fail");
-        assert!(one_signature_finalize.contains("još potpisa"));
+        assert!(one_signature_finalize.contains("more signatures"));
         let one_signature_confirmer = ExpectedBroadcastConfirmer::for_network(
             MULTISIG_COORDINATOR,
             &destination,
@@ -1156,7 +1156,7 @@ mod tests {
         )
         .await
         .expect_err("stage: duplicate Signer A must be rejected");
-        assert!(duplicate_error.contains("već je odobrio"));
+        assert!(duplicate_error.contains("already approved"));
         let after_duplicate = multisig_draft(&state, &proposal.data.draft_id)?;
         assert_eq!(after_duplicate.psbt, after_signer_a.psbt);
         assert_eq!(after_duplicate.signed_by, [MULTISIG_SIGNER_A]);
@@ -1332,7 +1332,7 @@ mod tests {
         )
         .await
         .expect_err("stage: consumed multisig authorization must not replay");
-        assert!(replay_error.contains("Broadcast autorizacija nije valjana"));
+        assert!(replay_error.contains("broadcast authorization is invalid"));
 
         let mut network_traces = Vec::new();
         let network_status = rpc::set_network_active(&client, true, &mut network_traces)
@@ -1401,7 +1401,7 @@ mod tests {
                 authorized_preflight_version,
             )
             .expect_err("stage: successful authorization must be consumed");
-        assert!(consumed.contains("Broadcast autorizacija nije valjana"));
+        assert!(consumed.contains("broadcast authorization is invalid"));
         assert!(node
             .mempool_contains(&broadcast.data.txid)
             .await

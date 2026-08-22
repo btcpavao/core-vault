@@ -2997,9 +2997,9 @@ Do not bake English text into important 3D textures unnecessarily.
 
 # 236. English as Development Source
 
-Project documentation and primary development identifiers may remain English.
+Project documentation, development identifiers, and user-facing copy use English.
 
-User-facing Croatian and English support follow localization specifications.
+Any future language support must follow the localization specifications and cover the complete user-facing flow.
 
 ---
 

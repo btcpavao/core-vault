@@ -1,169 +1,131 @@
-# Core Vault UI — design audit
+# Core Vault UI design audit
 
-## Prostorna revizija · 13. kolovoza 2026.
+## Spatial review, August 13, 2026
 
-Aktualni shell ponovno je pregledan u stvarnom browser renderu. Rezultat ostaje **Experimental; nije Mainnet proizvod**.
+The current shell was reviewed again in a real browser render. It remains experimental software, not a Mainnet product.
 
-| Provjera | Rezultat |
+| Check | Result |
 | --- | --- |
-| Desktop 1024 × 700 | svih osam scena bez horizontalnog prelijevanja; vertikalni sadržaj ostaje čitljiv i skrolabilan |
-| Desktop 1280 × 800 | svih osam scena bez horizontalnog prelijevanja; ispravljen min-content clipping desnog workbencha |
-| Cijeli spatial demo | onboarding → HR/EN → vault → backup → restore fingerprint → receive QR → PSBT → sign → finalize → broadcast |
-| Engine Room | P2P off/on radi; tekst izričito razlikuje disabled network od air gapa |
-| Legacy 2-of-3 | ulaz i povratak rade; izvorni tok ostaje zaseban |
-| Reduced motion i audio | reduced motion potvrđen na `html[data-motion=reduced]`; zvuk ostaje opt-in i mute je trajan |
-| Browser console | 0 warning/error poruka |
-| Automatizirani suite | 25 frontend/arhitekturnih + 22 Rust/RPC testa; 47 ukupno |
-| Build i ovisnosti | Vite i Tauri release build prolaze; `npm audit` prijavljuje 0 ranjivosti |
+| Desktop 1024 × 700 | all eight scenes avoid horizontal overflow; vertical content remains readable and scrollable |
+| Desktop 1280 × 800 | all eight scenes avoid horizontal overflow; right-workbench min-content clipping is fixed |
+| Full spatial demo | onboarding, vault, backup, restore fingerprint, receive QR, PSBT, sign, finalize, broadcast |
+| Engine Room | P2P off and on work; text distinguishes a disabled network from an air gap |
+| Legacy 2-of-3 | entry and return work; the original flow remains separate |
+| Reduced motion and audio | reduced motion confirmed on `html[data-motion=reduced]`; sound remains opt-in and mute persists |
+| Browser console | 0 warnings or errors |
+| Automated suite | 25 frontend and architecture tests plus 22 Rust and RPC tests, 47 total |
+| Build and dependencies | Vite and Tauri release builds pass; `npm audit` reports 0 vulnerabilities |
 
-Tablice ispod ostaju povijesni audit izvornog linearnog 2-od-3 prototipa koji je i dalje ugrađen kao Radionica.
+The rest of this document preserves the audit of the original linear 2-of-3 prototype, which remains available as Workshop.
 
-Datum: 12. kolovoza 2026.  
-Status: **prolazi kao Experimental Signet Prototype; ne prolazi kao Mainnet proizvod**.
+Original audit date: August 12, 2026
+Status: **passes as an Experimental Signet Prototype; does not pass as a Mainnet product**.
 
-Audit uspoređuje implementirani React UI s `DESIGN_RESEARCH.md`, `DESIGN_SYSTEM.md`,
-Bitcoin Design Guide obrascima i projektnim sigurnosnim ustavom. Pregledan je stvarni Vite
-render, ne samo source.
+The audit compares the rendered React UI with `DESIGN_RESEARCH.md`, `DESIGN_SYSTEM.md`, Bitcoin Design Guide patterns, and the project security charter. It reviewed the real Vite render, not source alone.
 
-## Stvarni QA dokaz
+## QA evidence
 
-| Provjera | Rezultat |
+| Check | Result |
 | --- | --- |
-| Desktop 1280 × 720 | Welcome, Core, backup, review, signing i success ekrani bez preklapanja |
-| Uski prikaz 700 × 900 | nema horizontalnog overflowa; sidebar postaje progress strip; CTA-i ostaju 48 px |
-| Cijeli safe-demo flow | Core → K1/K2/K3 → vault → 4 backupa → receive → review → K1+K2 → broadcast |
-| Signer kombinacije | K1+K2, K1+K3 i K2+K3 pokrivene frontend testom |
-| Browser console | 0 warning/error poruka tijekom cijelog demo tijeka |
-| Tipkovnica/semantika | native button/input/details; skip link; fokus se vraća na novi korak |
-| Reduced motion | CSS media query uklanja animacije i prijelaze |
-| Production build | Vite i optimizirani Tauri release binary uspješno buildani |
-| Automatizirani suite | 16 frontend/demo/arhitekturnih + 17 Rust/RPC testova; 33 ukupno |
+| Desktop 1280 × 720 | Welcome, Core, backup, review, signing, and success screens do not overlap |
+| Narrow 700 × 900 layout | no horizontal overflow; sidebar becomes a progress strip; CTAs remain 48 px high |
+| Full safe-demo flow | Core, K1/K2/K3, vault, four backups, receive, review, K1+K2, broadcast |
+| Signer combinations | K1+K2, K1+K3, and K2+K3 covered by frontend tests |
+| Browser console | 0 warnings or errors through the complete demo |
+| Keyboard and semantics | native buttons, inputs, and details; skip link; focus moves to the new step |
+| Reduced motion | CSS media query removes animations and transitions |
+| Production build | Vite and optimized Tauri release binary built successfully |
+| Automated suite | 16 frontend, demo, and architecture tests plus 17 Rust and RPC tests, 33 total at the time |
 
-Tijekom pregleda pronađena su i popravljena tri problema: novi dugi korak nasljeđivao je
-stari scroll, programatski fokus crtao je okvir oko cijelog `main` sadržaja, a demo model
-imao je interni `connected=true` iako je UI bio označen kao simulacija. Novi korak sada
-počinje na vrhu, vizualni focus ring ostaje na stvarnim kontrolama, a demo je i vizualno i
-podatkovno odvojen od stvarne Core veze.
+The review found and fixed three defects. A new long step inherited the old scroll position, programmatic focus drew a ring around the whole `main` region, and the demo model set `connected=true` despite being presented as simulated. New steps now start at the top, visual focus remains on real controls, and demo data is separated from a real Core connection in both presentation and state.
 
-Lokalni Rust integracijski fixture dodatno podiže efemerni `127.0.0.1` JSON-RPC server,
-provjerava cookie Basic auth, uspješan Signet handshake i ponovni Mainnet hard stop neposredno
-prije wallet rada. To nije zamjena za live Signet E2E, ali testira stvarnu HTTP/RPC granicu.
+A local Rust integration fixture also starts an ephemeral `127.0.0.1` JSON-RPC server, checks cookie Basic authentication, completes a Signet handshake, and repeats the Mainnet hard stop immediately before wallet work. This tests the actual HTTP and RPC boundary but does not replace live Signet E2E testing.
 
-## Pokrivenost obveznih tehničkih provjera
+## Required technical-check coverage
 
-| # | Zahtjev | Automatizirani dokaz |
+| # | Requirement | Automated evidence |
 | ---: | --- | --- |
-| 1 | Core connection | lokalni mock-RPC handshake s cookie authom |
-| 2 | Signet detection | RPC fixture + pure chain test |
-| 3 | Mainnet rejection | RPC fixture potvrđuje `STOP` prije wallet rada |
-| 4 | K1 wallet creation | command-registry test + puni browser demo |
-| 5 | descriptor wallet validation | Rust `verify_signing_wallet` put + source invariant |
-| 6 | `private_keys_enabled` validation | signing/coordinator guardovi + source invariant |
-| 7 | `listdescriptors` parsing | Rust public `wpkh` parser test |
-| 8 | receive descriptor selection | `/0/*`, `internal=false` parser pravilo |
-| 9 | change descriptor selection | `/1/*`, `internal=true` parser pravilo |
+| 1 | Core connection | local mock-RPC handshake with cookie authentication |
+| 2 | Signet detection | RPC fixture and pure chain test |
+| 3 | Mainnet rejection | RPC fixture confirms `STOP` before wallet work |
+| 4 | K1 wallet creation | command-registry test and full browser demo |
+| 5 | descriptor wallet validation | Rust `verify_signing_wallet` path and source invariant |
+| 6 | `private_keys_enabled` validation | signing and coordinator guards |
+| 7 | `listdescriptors` parsing | public `wpkh` parser test |
+| 8 | receive descriptor selection | `/0/*`, `internal=false` parser rule |
+| 9 | change descriptor selection | `/1/*`, `internal=true` parser rule |
 | 10 | duplicate fingerprint rejection | Rust key-set test |
 | 11 | duplicate tpub rejection | Rust key-set test |
-| 12 | private extended key rejection | tprv/xprv i private-descriptor testovi |
+| 12 | private extended-key rejection | tprv, xprv, and private-descriptor tests |
 | 13 | receive multisig construction | `wsh(sortedmulti(2,.../0/*))` unit test |
-| 14 | change multisig construction | branch builder i demo descriptor model |
-| 15 | `getdescriptorinfo` validation | architecture invariant + solvable/no-private pravila |
-| 16 | coordinator creation | command/RPC sequence invariant + browser demo |
-| 17 | coordinator s privatnim ključevima | `verify_coordinator` hard-stop invariant |
-| 18 | descriptor import | Rust test zahtijeva dva uspješna rezultata |
-| 19 | receive address generation | demo model zahtijeva `tb1`, solvable i watch-only |
-| 20 | sats/BTC conversion | Rust rounding + frontend consistency test |
-| 21 | funded PSBT creation | RPC-sequence invariant + puni browser demo |
-| 22 | prvi signer `complete=false` | demo state test |
-| 23 | updated PSBT propagation | PSBT ostaje u Rust draft stateu; source invariant |
-| 24 | drugi signer `complete=true` | demo state test |
-| 25 | sva tri signer para | K1+K2, K1+K3 i K2+K3 frontend test |
-| 26 | final hex extraction | finalize/broadcast sequence invariant |
-| 27 | broadcast | demo operacija + puni browser demo |
-| 28 | txid parsing | 64-znamenkasti lowercase hex test |
-| 29 | change balance | starting − sent − fee = remaining test |
-| 30 | bez secret leakagea | public backup/RPC redaction + no-persistence test |
+| 14 | change multisig construction | branch builder and demo descriptor model |
+| 15 | `getdescriptorinfo` validation | solvable and no-private invariants |
+| 16 | coordinator creation | command and RPC sequence invariant plus browser demo |
+| 17 | private keys in coordinator | `verify_coordinator` hard stop |
+| 18 | descriptor import | Rust test requires two successful results |
+| 19 | receive-address generation | demo model requires `tb1`, solvable, and watch-only |
+| 20 | sats and BTC conversion | Rust rounding and frontend consistency tests |
+| 21 | funded PSBT creation | RPC sequence invariant and full browser demo |
+| 22 | first signer `complete=false` | demo state test |
+| 23 | updated PSBT propagation | PSBT remains in Rust draft state |
+| 24 | second signer `complete=true` | demo state test |
+| 25 | all signer pairs | K1+K2, K1+K3, and K2+K3 frontend test |
+| 26 | final hex extraction | finalize and broadcast sequence invariant |
+| 27 | broadcast | demo operation and full browser demo |
+| 28 | txid parsing | 64-character lowercase hex test |
+| 29 | change balance | starting minus sent minus fee equals remaining |
+| 30 | no secret leakage | public-backup and RPC redaction plus no-persistence test |
 
-Stavke koje ovise o stvarnim Bitcoin Core odgovorima imaju dodatni live-E2E status otvoren
-u ograničenjima; tablica ne tvrdi da je mock fixture zamjena za test sa Signet sredstvima.
+Checks that depend on real Bitcoin Core responses still need live E2E coverage. The mock fixture is not presented as a substitute for a funded Signet test.
 
-## Mentalni model i hijerarhija
+## Design results
 
-| Prije / problem | Poslije / rješenje |
+| Earlier risk | Implemented answer |
 | --- | --- |
-| Multisig bi mogao početi s M-of-N, descriptorom i PSBT-om. | Welcome počinje pričom `Personal Vault`, dijagramom tri signing walleta i pravilom “any 2”. |
-| Wallet, key, vault i coordinator lako se mentalno stapaju. | Signeri su key kartice, policy je `2 of 3` čvor, vault je zaštićeni funds čvor, coordinator ima `Private keys: none`. |
-| Minimalizam bi mogao sakriti posljedice gubitka. | Review eksplicitno kaže: jedan izgubljeni ključ je podnošljiv; dva mogu zaključati sredstva. |
+| Multisig begins with M-of-N, descriptors, and PSBTs | Welcome begins with the `Personal Vault` story, three signing wallets, and the "any 2" rule |
+| Wallet, key, vault, and coordinator blur together | signers are key cards, policy is a `2 of 3` node, vault is protected funds, coordinator says `Private keys: none` |
+| Minimalism hides loss consequences | review states that one lost key is tolerable and two can lock the funds |
+| Debug Console requires commands and copied state | each screen has one dominant CTA across six major wizard phases |
+| RPC details overwhelm a newcomer | closed native `details` shows sanitized method, time, arguments, result, and explanation on request |
+| PSBT and raw hex leak to clipboard or logs | payload remains in Rust memory and Advanced displays `[REDACTED]` |
+| Backup looks like a later Settings task | K1, K2, K3, and public configuration form a blocking checkpoint before receive |
+| Public descriptors look harmless to share | UI labels them sensitive metadata that cannot spend but can track history |
+| Demo looks like a real connection | persistent `DEMO MODE, NO REAL BITCOIN CORE`, `Simulated Signet`, and `Not connected · demo data` facts |
+| Broadcast success hides change | success shows starting amount, sent amount, fee, remaining amount, and `/1/*` change protection |
+| Generic crypto styling weakens trust | warm neutral canvas, near-black sidebar, orange only for the primary action, no gradients, glow, or market widgets |
 
-## Primarna akcija i progresivno otkrivanje
+## Screen audit
 
-| Prije / problem | Poslije / rješenje |
-| --- | --- |
-| Debug Console flow traži više naredbi i kopiranje statea. | Svaki ekran ima jedan dominantan CTA, a wizard ima šest velikih faza. |
-| RPC detalji mogu zatrpati početnika. | `Show what Bitcoin Core is doing` je zatvoren native `details`; prikazuje metodu, timestamp, sanitizirane argumente, rezultat i objašnjenje. |
-| PSBT Base64 i raw hex lako završe u clipboardu/logu. | Payload ostaje u Rust memoriji i Advanced trace prikazuje `[REDACTED]`; to je namjerno strože odstupanje od Guide reference flowova. |
-
-## Sigurnost, backup i privatnost
-
-| Prije / problem | Poslije / rješenje |
-| --- | --- |
-| Backup može izgledati kao naknadna Settings opcija. | K1/K2/K3 Core backup i public config čine blokirajući checkpoint prije receive testa. |
-| Public descriptor može se pogrešno tretirati kao bezazlen share file. | UI ga označava kao sensitive wallet metadata koja ne može trošiti, ali može pratiti povijest. |
-| Balance i adresa mogu se prikazivati bez potrebe. | Adresa se pojavljuje samo u receive/review kontekstu; balance je skriven po zadanom i ima sats + BTC tek nakon reveal radnje. |
-| Demo je mogao izgledati kao prava Core veza. | Trajna oznaka `DEMO MODE — NO REAL BITCOIN CORE`, `Simulated Signet` i trust fact `Not connected · demo data`. |
-| Broadcast uspjeh bez change objašnjenja ostavlja nesigurnost. | Success prikazuje starting, sent, fee, remaining i objašnjava internu `/1/*` change zaštitu. |
-
-## Površine, tipografija i motion
-
-| Prije / problem | Poslije / rješenje |
-| --- | --- |
-| Stari vodič i “crypto app” klišeji ne odgovaraju security proizvodu. | Topla neutralna podloga, gotovo crni sidebar, narančasta samo za primarnu akciju; bez gradijenata, glow efekata i market elemenata. |
-| Arbitraran CSS otežava konzistentnost. | Centralni color/spacing/radius/type/shadow tokeni; koncentrirani ugniježđeni radijusi. |
-| Previše motiona može prikriti stanje. | Samo kratki enter, press i icon prijelazi; točan `transition-property`; nema `transition: all`. |
-| Mono font svugdje djeluje developerski. | Mono je ograničen na adrese, txid i RPC payload; objašnjenja ostaju u system sans tipografiji. |
-
-## Audit po glavnim ekranima
-
-| Ekran | Purpose / primary action | Security / privacy | Bitcoin Design alignment | Odstupanje ili rizik |
-| --- | --- | --- | --- | --- |
-| Welcome | odmah objašnjava 2-of-3 i nudi `Create vault` | local/no cloud/no telemetry činjenice | lifecycle, savings/shared onboarding | jedan local-machine template, bez hardware keyja |
-| Core connection | potvrđuje lokalni Core i mrežu | Mainnet hard stop; loopback-only | verifiable trust, error recovery | manual cookie path u Advanced |
-| K1/K2/K3 | jedan signer: create → encrypt → ready | password nekontroliran i odmah očišćen | linear key-slot onboarding | “use existing wallets” još nije V1 UI |
-| Vault review | razumljiv finalni policy review | loss consequences; watch-only coordinator | multi-key wallet finalize | sva tri signera su na istom uređaju |
-| Backup | razlikuje signing capability i public config | četiri obvezna rezultata; privacy warning | multi-key backup pattern | aplikacija ne propisuje fizičku lokaciju |
-| Receive | stvara novu adresu i čeka uplatu | adresa samo kontekstualno; balance hidden | receiving + wallet privacy | pending/confirmed se u V1 zbrajaju |
-| Send/review | prikazuje destination, amount, fee, remaining, approvals | edit prije potpisa; raw PSBT skriven | sending + transaction review | bez coin controla i address booka |
-| Add signature | status tri signera i broj odobrenja | drugačiji signer obvezan; Core unlock 5 s | cosigner/signing slots | V1 samo local Core metoda |
-| Success | txid i change računica | bez explorera; lokalni balance refresh | final consent + change education | refresh je best-effort; fallback je procjena |
+| Screen | Main action and security result | Remaining limit |
+| --- | --- | --- |
+| Welcome | explains 2-of-3; states local, no cloud, no telemetry | one local-machine template, no hardware key |
+| Core connection | confirms local Core and network; Mainnet hard stop and loopback-only | manual cookie path in Advanced |
+| K1/K2/K3 | create, encrypt, ready; uncontrolled passphrase clears immediately | existing-wallet import is not in V1 |
+| Vault review | final policy and loss consequences; watch-only coordinator | all signers are on one device |
+| Backup | distinguishes signing capability from public configuration; four required results | application does not prescribe physical storage |
+| Receive | new contextual address and hidden balance | V1 combines pending and confirmed amounts |
+| Send and review | destination, amount, fee, remainder, approvals; edit before signing | no coin control or address book |
+| Add signature | three signer states, distinct signer required, five-second Core unlock | local Core method only |
+| Success | txid and change calculation, no explorer, local balance refresh | refresh is best effort with an estimate fallback |
 
 ## Accessibility
 
-- DOM ima jedan `h1` po aktivnom koraku, semantički `main`, `aside`, `header`, `footer`,
-  `ol`, `dl`, `details` i povezane wrapping labele.
-- Minimalne interaktivne mete su 44 × 44 px; primarni gumbi 48 px.
-- Status koristi ikonu, riječ i boju. Fokus ring je 3 px i nije uklonjen s kontrola.
-- Vault dijagram ima tekstualni `role=img` opis i stvarni tekst signera/statusa.
-- Layout je provjeren u 700 px širokom viewportu kao proxy za 200% desktop zoom.
-- Otvorena stavka za user test: potvrditi čitljivost punih adresa i RPC JSON-a s pravim
-  screen readerom, ne samo DOM snapshotom.
+- The active step has one `h1` and uses semantic `main`, `aside`, `header`, `footer`, `ol`, `dl`, `details`, and wrapping labels.
+- Interactive targets are at least 44 by 44 px; primary buttons are 48 px high.
+- Status uses an icon, word, and color. Controls retain a 3 px focus ring.
+- The vault diagram has a text `role=img` description and real signer and status text.
+- A 700 px viewport serves as a proxy for 200% desktop zoom.
+- A user test still needs to confirm full-address and RPC JSON readability with a real screen reader, not only DOM snapshots.
 
-## Poznate otvorene stavke
+## Known open items
 
-1. Live Signet E2E nije izveden u ovom prolazu: lokalni Bitcoin-Qt radi s `-signet`, ali bez
-   `-server` i bez RPC cookieja. Aplikacija je ispravno prikazala offline stanje; Core nije
-   nasilno restartan.
-2. Nema neovisnog sigurnosnog audita, stvarnih korisničkih sesija ni Mainnet podrške.
-3. Nema recovery/import flowa, postojećih walleta, hardware signera ili PSBT file/QR metode.
-4. V1 zbraja confirmed i unconfirmed receive balance; zasebna stanja dolaze nakon prvog
-   user testa i live integration fixturea.
-5. Opći vault dashboard i transaction history namjerno su odgođeni; prototip dokazuje
-   linearni acceptance flow.
-6. Create i encrypt su dva odvojena Signet koraka; prekid između njih može ostaviti
-   testni signer neenkriptiranim. Atomska kreacija mora prethoditi bilo kakvom Mainnet radu.
+1. This pass did not run live Signet E2E. The local Bitcoin-Qt instance used `-signet` without `-server` or an RPC cookie. The application correctly showed offline state, and the review did not restart Core.
+2. There is no independent security audit, moderated user session, or Mainnet support.
+3. Recovery and import, existing wallets, hardware signers, and PSBT file or QR methods are absent.
+4. V1 combines confirmed and unconfirmed receive balances. Separate states follow user testing and a live integration fixture.
+5. A general vault dashboard and transaction history are deliberately deferred. The prototype proves the linear acceptance flow.
+6. Creation and encryption are separate Signet steps. An interruption may leave a test signer unencrypted. Atomic creation must precede any Mainnet work.
 
-## Zaključak
+## Conclusion
 
-UI zadovoljava prototipni cilj “easy to use correctly”: početnik ne mora vidjeti RPC,
-descriptor ni PSBT, ali napredni korisnik može auditirati sanitizirani Core tijek. Release
-ostaje strogo označen kao Signet eksperiment dok ne prođe live E2E, moderirani user test i
-neovisni security review.
+The UI meets the prototype goal of being easy to use correctly. A newcomer need not see RPC, descriptors, or PSBTs, while an advanced user can inspect a sanitized Core flow. The release remains labeled as a Signet experiment until it passes live E2E, moderated user testing, and an independent security review.

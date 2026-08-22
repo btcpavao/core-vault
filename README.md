@@ -20,7 +20,7 @@ The authoritative project specifications live in the [docs/](docs/README.md) dir
 - guides a single-signature spend through a PSBT flow: create, review, briefly unlock and sign, finalize, run `testmempoolaccept`, then broadcast separately
 - keeps the raw PSBT, final transaction hex, RPC cookie, and passwords outside the React renderer
 - preserves the existing 2-of-3 Signet flow without changing its backend contract
-- includes English and Croatian, opt-in sound, mute, reduced motion, and an initial walkthrough
+- uses English throughout, with opt-in sound, persistent mute, reduced motion, and an initial walkthrough
 - clearly labels the browser demo and never presents it as a real Bitcoin Core connection
 
 ## Prerequisites
@@ -55,7 +55,7 @@ To preview the interface without Bitcoin Core:
 npm run dev
 ```
 
-Open `http://127.0.0.1:1420`. The browser view permanently displays `LOCAL DEMONSTRATION MODE — NO REAL BITCOIN CORE`. All values and results are synthetic.
+Open `http://127.0.0.1:1420`. The browser view permanently displays `LOCAL DEMONSTRATION MODE. NO REAL BITCOIN CORE`. All values and results are synthetic.
 
 ## Test and build
 
@@ -105,5 +105,5 @@ tests/                      frontend, architecture, and security invariants
 - coin control, a fee-estimation UI, an address book, and advanced RBF are not implemented
 - display labels and the backup receipt are stored only for the current session; the Bitcoin Core wallet itself persists
 - restore verification compares public descriptors but does not replace a regular operational recovery drill
-- the Croatian translation covers the spatial shell; the preserved 2-of-3 workshop remains English-first
+- the interface and repository documentation are English-only
 - a real end-to-end test requires a local Bitcoin Core 31.1 instance, RPC `server=1`, and test funds
