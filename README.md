@@ -1,65 +1,63 @@
 # Core Vault
 
-Eksperimentalna Tauri desktop aplikacija koja organizira lokalne Bitcoin Core wallet operacije u osam prostornih, dostupnih scena. Prva vertikala je šifrirani osobni descriptor wallet; postojeći Signet 2-od-3 tok ostaje dostupan kao zasebna radionica.
+An experimental Tauri desktop app that organizes local Bitcoin Core wallet operations into eight spatial, accessible scenes. Its primary flow is an encrypted personal descriptor wallet. The existing Signet 2-of-3 flow remains available as a separate workshop.
 
 > Experimental software. Use only with test funds on Signet, Testnet4, or Regtest.
 
 Core Vault is an independent interface powered by Bitcoin Core. It is not developed or endorsed by the Bitcoin Core project.
 
-## Project specification
+## Project specifications
 
-Autoritativne specifikacije projekta nalaze se u direktoriju [docs/](docs/README.md). Codex i
-drugi suradnici moraju ih pročitati prije svakog značajnog produktnog ili sučeljnog rada te
-izričito prijaviti svaki nesklad između specifikacije i postojeće implementacije.
+The authoritative project specifications live in the [docs/](docs/README.md) directory. Codex and other contributors must read them before any substantial product or interface work and explicitly report any discrepancy between the specifications and the current implementation.
 
-## Što radi
+## What it does
 
-- otkriva lokalni Bitcoin Core preko standardnog cookieja i loopback RPC-a
-- trajno prikazuje mrežu, verziju, sinkronizaciju, peerove, mempool i status P2P mreže
-- izrađuje odmah šifrirani Personal Vault pozivom `createwallet(passphrase=…)`
-- izrađuje i provjerava `backupwallet` kopiju te uspoređuje javni fingerprint nakon `restorewallet`
-- generira wallet-owned `bech32m` adresu i lokalni QR kod
-- vodi single-sig slanje kao PSBT: izrada → pregled → kratko otključavanje i potpis → finalizacija → `testmempoolaccept` → zasebna objava
-- zadržava raw PSBT, finalni hex, RPC cookie i lozinke izvan React renderera
-- čuva stari 2-od-3 Signet tijek bez promjene njegovog backend ugovora
-- ima English/Hrvatski, opt-in zvuk, mute, reduced motion i prvi walkthrough
-- ima jasno označen browser demo koji nikad ne glumi stvarnu Core vezu
+- detects a local Bitcoin Core instance through the standard authentication cookie and loopback RPC
+- continuously displays the network, version, sync progress, peers, mempool, and P2P network status
+- creates an encrypted Personal Vault from the start by calling `createwallet(passphrase=...)`
+- creates and verifies a `backupwallet` copy, then compares the public fingerprint after `restorewallet`
+- generates a wallet-owned `bech32m` address and a local QR code
+- guides a single-signature spend through a PSBT flow: create, review, briefly unlock and sign, finalize, run `testmempoolaccept`, then broadcast separately
+- keeps the raw PSBT, final transaction hex, RPC cookie, and passwords outside the React renderer
+- preserves the existing 2-of-3 Signet flow without changing its backend contract
+- includes English and Croatian, opt-in sound, mute, reduced motion, and an initial walkthrough
+- clearly labels the browser demo and never presents it as a real Bitcoin Core connection
 
-## Preduvjeti
+## Prerequisites
 
-- macOS, Windows ili Linux s Tauri 1 sistemskim preduvjetima
+- macOS, Windows, or Linux with the Tauri 1 system prerequisites
 - Node.js 22+
 - Rust/Cargo 1.75+
-- Bitcoin Core 31.1 preporučen (`26+` je minimalni kompatibilni prag starog prototipa)
-- razvojni Core profil na Signetu, Testnet4 ili Regtestu, s uključenim RPC serverom
+- Bitcoin Core 31.1 recommended; `26+` remains the minimum compatibility threshold for the legacy prototype
+- a development Bitcoin Core profile on Signet, Testnet4, or Regtest with the RPC server enabled
 
-Signet primjer za `bitcoin.conf`:
+Example Signet configuration for `bitcoin.conf`:
 
 ```ini
 signet=1
 server=1
 ```
 
-Ponovno pokrenite Bitcoin Core nakon promjene konfiguracije. Standardni Signet RPC port je `38332`.
+Restart Bitcoin Core after changing the configuration. The standard Signet RPC port is `38332`.
 
-## Pokretanje
+## Run the app
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-Tauri prozor će pokušati pronaći lokalni Core cookie. Ako `bitcoin-qt` radi bez `server=1`, zatvorite ga, dodajte postavku i ponovno ga pokrenite.
+The Tauri window will try to find the local Bitcoin Core cookie. If `bitcoin-qt` is running without `server=1`, close it, add the setting, and start it again.
 
-Za pregled sučelja bez Bitcoin Corea:
+To preview the interface without Bitcoin Core:
 
 ```bash
 npm run dev
 ```
 
-Otvorite `http://127.0.0.1:1420`. Browser prikaz ima trajnu oznaku `LOCAL DEMONSTRATION MODE — NO REAL BITCOIN CORE`; sve brojke i rezultati su sintetički.
+Open `http://127.0.0.1:1420`. The browser view permanently displays `LOCAL DEMONSTRATION MODE — NO REAL BITCOIN CORE`. All values and results are synthetic.
 
-## Testiranje i build
+## Test and build
 
 ```bash
 npm run lint
@@ -72,40 +70,40 @@ npm audit
 npm run tauri build
 ```
 
-Rust mock-RPC testovi otvaraju privremeni port na `127.0.0.1`, pa restriktivni sandbox može tražiti dopuštenje. Detaljan ručni test nalazi se u [docs/TESTING.md](docs/TESTING.md).
+The Rust mock RPC tests open a temporary port on `127.0.0.1`, so a restrictive sandbox may require permission. See [docs/TESTING.md](docs/TESTING.md) for the detailed manual test plan.
 
-## Sigurnosna granica
-
-```text
-React scene → tipizirana Tauri naredba → Rust sigurnosna provjera → lokalni Bitcoin Core RPC
-```
-
-Nema cloud backenda, udaljenog noda, analitike, price API-ja ili explorer ovisnosti u runtimeu. Rust prihvaća samo loopback host, isključuje proxy, redigira lozinke i zaustavlja nove wallet mutacije na mainnetu. `setnetworkactive(false)` isključuje Core P2P mrežu; ne stvara air gap.
-
-Počnite sa [sigurnosnim modelom](docs/SECURITY_THREAT_MODEL.md), [RPC mapom](docs/RPC_MAPPING.md), [backup/restore postupkom](docs/BACKUP_RESTORE.md) i [mrežnom podrškom](docs/NETWORK_SUPPORT.md).
-
-## Struktura
+## Security boundary
 
 ```text
-src/SpatialApp.tsx          prostorni shell i osam scena
-src/App.tsx                 sačuvani 2-od-3 Signet tijek
-src/state/machines.ts       eksplicitni UI state vocabulary
-src/lib/tauri.ts            tipizirani frontend adapter
-src-tauri/src/personal.rs   Personal Vault, backup/restore, receive i PSBT orkestracija
-src-tauri/src/vault.rs      postojeći 2-od-3 tok
-src-tauri/src/rpc.rs        loopback cookie RPC, autodetekcija i status
-src-tauri/src/security.rs   validacija hosta, putanje i privatnog materijala
-docs/                       aktualni proizvodni i sigurnosni ugovor
-tests/                      frontend, arhitekturni i sigurnosni invarijanti
+React scene → typed Tauri command → Rust security check → local Bitcoin Core RPC
 ```
 
-## Poznata ograničenja
+Core Vault has no cloud backend, remote node, analytics, price API, or block explorer dependency at runtime. The Rust layer accepts only a loopback host, disables proxy use, redacts passwords, and blocks new wallet mutations on mainnet. `setnetworkactive(false)` disables Bitcoin Core's P2P networking. It does not create an air gap.
 
-- nije production-ready, nije neovisno auditirano i nije za stvarni bitcoin
-- hardverski walleti i vanjski signeri nisu implementirani
-- PSBT import/export preko datoteke, USB-a ili QR-a nije implementiran
-- coin control, fee estimation UI, address book i napredni RBF nisu implementirani
-- oznake za prikaz i backup receipt čuvaju se samo tijekom sesije; Core wallet sam ostaje trajan
-- restore provjera uspoređuje javne descriptore, ali nije zamjena za redovitu operativnu recovery vježbu
-- hrvatski prijevod pokriva prostorni shell; sačuvana 2-od-3 radionica ostaje English-first
-- pravi end-to-end test treba lokalni Core 31.1, RPC `server=1` i testna sredstva
+Start with the [security model](docs/SECURITY_THREAT_MODEL.md), [RPC map](docs/RPC_MAPPING.md), [backup and restore procedure](docs/BACKUP_RESTORE.md), and [network support](docs/NETWORK_SUPPORT.md).
+
+## Structure
+
+```text
+src/SpatialApp.tsx          spatial shell and eight scenes
+src/App.tsx                 preserved 2-of-3 Signet flow
+src/state/machines.ts       explicit UI state vocabulary
+src/lib/tauri.ts            typed frontend adapter
+src-tauri/src/personal.rs   Personal Vault, backup/restore, receive, and PSBT orchestration
+src-tauri/src/vault.rs      existing 2-of-3 flow
+src-tauri/src/rpc.rs        loopback cookie RPC, autodetection, and status
+src-tauri/src/security.rs   host, path, and private-material validation
+docs/                       current product and security contract
+tests/                      frontend, architecture, and security invariants
+```
+
+## Known limitations
+
+- not production-ready, not independently audited, and not intended for real bitcoin
+- hardware wallets and external signers are not implemented
+- PSBT import and export through files, USB, or QR codes are not implemented
+- coin control, a fee-estimation UI, an address book, and advanced RBF are not implemented
+- display labels and the backup receipt are stored only for the current session; the Bitcoin Core wallet itself persists
+- restore verification compares public descriptors but does not replace a regular operational recovery drill
+- the Croatian translation covers the spatial shell; the preserved 2-of-3 workshop remains English-first
+- a real end-to-end test requires a local Bitcoin Core 31.1 instance, RPC `server=1`, and test funds
